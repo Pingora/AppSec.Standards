@@ -17,3 +17,33 @@ This is a collection of standards documents related to Application Security (App
 ## Guidance
 
 - [Citizen Developers and Vibe Coders](<CITIZEN-DEVELOPERS-VIBE-CODERS.md>)
+- [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>)
+
+## PDF
+
+This repository uses Pandoc to render Markdown files to PDF. The renderer finds every `*.md` file in the repo and writes PDFs to `dist/pdf/`.
+
+Prerequisites:
+
+- Pandoc
+- A Pandoc-supported PDF engine, such as Typst, MiKTeX, TeX Live, or wkhtmltopdf.
+
+Run the renderer from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/render-markdown-to-pdf.ps1
+```
+
+Use a different PDF engine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/render-markdown-to-pdf.ps1 -PdfEngine typst
+```
+
+Render from a specific source directory or write to a different output directory:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/render-markdown-to-pdf.ps1 -Source . -Output dist/pdf
+```
+
+The script preserves the repository folder structure under `dist/pdf/` and rewrites internal links that point to `.md` files so they point to the matching `.pdf` files.
