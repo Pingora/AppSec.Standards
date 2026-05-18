@@ -1,0 +1,19 @@
+# AppSec Standards
+
+This is a collection of standards documents related to Application Security (AppSec).
+
+## Standards
+
+- [CS-1.1 Code Security Training](<CS-1.1 Code Security Training.md>)
+- [CS-2.1 Enable Code Scanning](<CS-2.1 Enable Code Scanning.md>)
+- [CS-2.2 Automation of Code Scanning](<CS-2.2 Automation of Code Scanning.md>)
+- [CS-3.1 Third Party Licenses](<CS-3.1 Third Party Licenses.md>)
+- [CS-4.1 Code Scanning Vulnerability Threshold Achieved](<CS-4.1 Code Scanning Vulnerability Threshold Achieved.md>)
+- [CS-5.1 Secrets in Code](<CS-5.1 Secrets in Code.md>)
+- [VM-1.1 DAST Scan Report](<VM-1.1 DAST Scan Report.md>)
+- [VM-1.2 DAST Vulnerabilities Threshold](<VM-1.2 DAST Vulnerabilities Threshold.md>)
+- [VM-1.3 DAST Recurrent Scanning](<VM-1.3 DAST Recurrent Scanning.md>)
+
+## Guidance
+
+- [Citizen Developers and Vibe Coders](<CITIZEN-DEVELOPERS-VIBE-CODERS.md>)
