@@ -18,6 +18,8 @@ This is a collection of standards documents related to Application Security (App
 
 - [Citizen Developers and Vibe Coders](<CITIZEN-DEVELOPERS-VIBE-CODERS.md>)
 - [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>)
+- [Supply Chain Security Roadmap](<SUPPLY-CHAIN-ROADMAP.md>)
+- [Wiz Adoption Roadmap](<WIZ-ROADMAP.md>)
 
 ## PDF
 
