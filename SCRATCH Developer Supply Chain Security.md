@@ -1,6 +1,10 @@
 === Developer Supply Chain Security ===
 
-# problem statement (send to Dan F + Jared S)
+# links
+
+- [Developer Software Chain Security](https://bayview0.sharepoint.com/:f:/s/ISRC/IgBXs7tCosqNSb5ZwVQVYWqTARcMCjtus_CpVChmc-CcsgU?e=ISgmUM)
+
+# problem statement
 
 "Implementing control over software development package management resolution, and preventing data infil/exfil."
 

@@ -2,433 +2,261 @@
 
 **Status:** Draft
 
+**Current focus:** Developers must only pull packages from internally managed package repositories.
+
 ## Purpose
 
-Bayview should assume that a software supply chain attack will eventually affect the organization or one of its dependencies. That assumption changes the goal from only trying to predict the next compromised npm, PyPI, Maven, NuGet, container, or operating system package to also reducing the blast radius when a compromised package executes.
+Bayview's near-term supply chain security roadmap is focused on one control: stop developers from resolving software packages directly from public package repositories such as npm, PyPI, Maven Central, NuGet, RubyGems, Go module proxies, Cargo, public container registries, and similar external sources.
 
-The goal of this roadmap is to make safe package use, isolated development, governed build environments, and fast incident response part of the normal development lifecycle.
+Today, many developers pull packages directly from the internet. If a trusted public package, child dependency, maintainer account, or registry path is compromised, malicious code may execute in developer environments and expose developer secrets. Reactive defenses such as SCA scanning are still useful, but they do not prevent the initial package resolution path from reaching developer machines.
 
-This roadmap expands on [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>) and [Citizen Developers and Vibe Coders](<CITIZEN-DEVELOPERS-VIBE-CODERS.md>).
+This roadmap narrows the work to package source control. Broader supply chain topics such as sandboxed development, full incident response, container hardening, credential redesign, and general vulnerability remediation can remain in other AppSec workstreams.
 
-## Threat Context
+This roadmap expands on [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>) and the working notes in [SCRATCH Developer Supply Chain Security](<SCRATCH Developer Supply Chain Security.md>).
 
-Supply chain attacks are no longer limited to obscure packages or simple typosquatting. Modern campaigns compromise trusted packages, steal developer credentials, abuse CI/CD workflows, publish malicious child dependencies, and spread through legitimate package manager behavior.
+## Requirement
 
-The Shai-Hulud campaign is a useful planning example. Public reporting described a May 2026 Mini Shai-Hulud wave affecting npm and PyPI packages, including a May 11, 2026 wave against package ecosystems used by developers. On May 12, 2026, researchers reported that weaponized Shai-Hulud code was publicly released online, increasing the likelihood of copycat attacks and variants. Additional public reporting on May 19, 2026 described hundreds of additional npm package versions being published in a later wave.
+1. Developers must only pull packages from internally managed package repositories.
 
-Bayview should treat this as a warning about attacker repeatability. It is not realistic to know which dependency will be compromised next. It is realistic to control where packages come from, where package install scripts run, what secrets are available in those environments, and how quickly the SOC and AppSec teams can determine whether Bayview is affected.
+For this roadmap, an internally managed package repository may be:
+
+- A hosted internal repository for Bayview-owned packages.
+- A proxy, mirror, or grouped repository managed by Bayview for approved public packages.
+- An approved cleanroom, hardened, or curated package source connected through Bayview-controlled repository management.
+- An approved internal container registry or base image repository.
+
+It does not include direct developer access to public package registries or random vendor download URLs unless there is a documented, time-bound exception.
+
+## Scope
+
+**In scope**
+
+- Identify coding languages, package managers, package ecosystems, and developer workflows in use.
+- Select and configure internally managed repositories for package resolution.
+- Migrate developer package manager configuration to internal repositories.
+- Block, alert on, or otherwise prevent direct external package repository access.
+- Define exceptions, ownership, monitoring, and success metrics.
+- Update the Secure Software Standard to require internal package repositories.
+
+**Out of scope for this focused roadmap**
+
+- A complete dependency approval program for every package and version.
+- A full sandboxed development mandate.
+- A broad local laptop development ban.
+- General SCA remediation and CVE management.
+- Full supply chain incident response runbooks.
+- Enterprise container hardening outside of internal image source control.
 
 ## Target State
 
-- Developers, CI/CD pipelines, containers, and deployment workflows use approved package sources instead of direct public downloads.
-- Package manifests and lockfiles are committed to approved source control and scanned.
-- New packages, AI-suggested packages, major version upgrades, and unusual dependencies are reviewed before production use.
-- Dependency cooldowns prevent automatic adoption of brand-new package versions until enough time has passed for malicious releases to be detected.
-- High-risk development runs in sandboxed environments such as GitHub Codespaces, stripped-down virtual machines, dedicated build containers, or hardened CI runners.
-- Local laptop development is restricted or prohibited for high-risk production-bound projects once a usable sandboxed development path exists.
-- Developers have a supported "happy path" for development environments, tools, package sources, authentication, debugging, and deployment.
-- Containerized applications use approved minimal base images and include only necessary runtime packages.
-- Hardened package providers or cleanroom-built package sources, such as Seal Security, Chainguard, or equivalent approved services, are evaluated for critical applications and difficult-to-patch vulnerabilities.
-- The SOC, AppSec, Cloud Security, and engineering teams can quickly determine whether Bayview uses a compromised package, version, container image, infrastructure pattern, or CI/CD workflow.
-- Credential rotation, indicator hunting, package removal, rebuild, redeploy, and exception handling are documented and practiced.
+- Developers resolve packages only from approved internal repositories.
+- Public package repositories are blocked by default for developer package manager traffic.
+- Internal repositories provide package caching, access control, audit logs, and a central place to enforce policy.
+- Common ecosystems have documented setup instructions and default configuration.
+- New or missing package requests have a lightweight intake path.
+- Exceptions are time-bound, owned, reviewed, and visible to AppSec and platform teams.
+- Repository usage can be measured by team, application, ecosystem, and package source.
 
 ## Guiding Principles
 
-- **Assume compromise.** The roadmap should reduce impact when a package, maintainer account, registry, or build workflow is compromised.
-- **Reduce available secrets.** Package installation and build steps should not have broad access to developer API keys, cloud credentials, personal files, production tokens, or administrative tools.
-- **Make the secure path usable.** Developers need approved environments with the tools they need. If sandboxed development is painful, teams will route around it.
-- **Prefer stable dependencies.** Teams should avoid unnecessary packages, newly published packages, abandoned packages, and bleeding-edge versions unless there is a clear reason.
-- **Control package sources.** Direct downloads from public registries, GitHub release URLs, shell installer commands, and random vendor sites should be exceptions, not the default.
-- **Fix without breaking where possible.** Backported fixes and hardened packages can reduce vulnerability exposure when a direct upstream upgrade would cause application risk.
-- **Keep citizen-developed code visible.** Scripts, automations, vibe-coded tools, and low-code projects can introduce the same dependency and credential risks as formal applications.
+- **Control package resolution first.** The first milestone is not perfect package judgment; it is making sure packages enter developer workflows through Bayview-managed paths.
+- **Make the internal path usable.** Developers need working package manager configuration, documentation, common package availability, and fast support.
+- **Block with visibility.** Start with logging and pilot enforcement where needed, but the end state is to prevent direct external repository use.
+- **Prefer a consistent platform pattern.** Artifactory and Nexus solve similar repository-management problems; Bayview should avoid duplicate enterprise patterns unless there is a clear reason.
+- **Keep exceptions narrow.** Exceptions should identify the owner, ecosystem, package source, reason, compensating controls, and expiration date.
 
-## Tools Breakdown
+## Stakeholder Alignment
 
-These tools are complementary, not interchangeable. Artifactory and Nexus are repository managers that help control where packages and artifacts come from. Chainguard and Seal Security reduce vulnerability and compromise exposure by changing what Bayview runs or consumes. Socket.dev should also be considered as a package-risk firewall and developer-workflow control, especially for blocking malicious or suspicious packages before they reach developer workstations or CI/CD.
+Initial stakeholder groups and owners from the working notes include Nick Akl's organization, Steve Dixon, Wing Chau, Matt Miller, Wei Zhang, Keith Nam, Marcelo Olivas, Henry Post, Jay Rosario, Chet Heacox, Dan F, Jared Stoll, Cheryl Klein, and Jay Pearlman.
 
-| Tool | Category | What It Actually Does | What It Defends Against | Best Fit in This Roadmap | What It Does Not Replace |
-| --- | --- | --- | --- | --- | --- |
-| JFrog Artifactory | Universal artifact and package repository manager | Hosts internal packages and build artifacts, proxies and caches public registries, supports many package and container formats, provides metadata, access control, and auditability for artifact use. | Direct public downloads, unmanaged package sources, dependency confusion risk when routing is configured correctly, untracked artifact movement, and lack of visibility into what developers and CI/CD are pulling. | Primary approved package source for developers and CI/CD, especially where Bayview wants one enterprise repository pattern across npm, PyPI, Maven, NuGet, containers, and other formats. | SCA tools, malicious package judgment by itself, source code review, hardened base images, or incident response. |
-| Sonatype Nexus Repository | Universal artifact and package repository manager | Provides hosted, proxy, and grouped repositories for common package ecosystems so teams can centralize dependency access instead of downloading directly from public registries. | Direct public downloads, unmanaged package sources, dependency confusion risk when routing is configured correctly, inconsistent repository use, and limited auditability of package consumption. | Alternative primary package source to Artifactory, especially if Sonatype tooling or Maven-heavy workflows are already preferred. | SCA tools, malicious package judgment by itself, source code review, hardened base images, or incident response. |
-| Chainguard | Hardened container image provider | Provides minimal, hardened container images built for reduced attack surface, frequent rebuilds, supply chain metadata, and lower vulnerability counts compared with broad general-purpose base images. | Bloated runtime images, stale OS packages, unnecessary shells and tools in production containers, excessive CVE noise, and opaque base image provenance. | Approved base image catalog for Tier 1 services and containerized workloads where Bayview wants fewer OS packages, fewer runtime tools, SBOM support, and faster base image remediation. | A repository manager, application dependency approval, package ingestion firewall, or complete replacement for application testing. |
-| Seal Security | Open source vulnerability remediation and backported patch provider | Produces patched versions of vulnerable open source dependencies, OS packages, and container components so teams can remediate CVEs without always taking upstream upgrades or breaking changes. | Known CVEs in direct and transitive dependencies, legacy or EOL components with no easy upgrade path, vulnerable OS packages, and remediation delays caused by breaking upstream upgrades. | Legacy, hard-to-upgrade, regulated, or SLA-sensitive applications where direct dependency upgrades are risky but critical and high vulnerabilities still need fast remediation. | A repository manager, install-time malware blocking, source control protection, CI/CD hardening, or normal upgrade planning. |
+The stakeholder group should confirm:
 
-Artifactory and Nexus should generally be treated as a platform selection decision: Bayview may not need both as primary enterprise repository managers unless different business units already depend on them. Chainguard and Seal Security can be evaluated independently because they solve different problems: hardened runtime inputs versus backported vulnerability remediation. Socket.dev or an equivalent tool belongs in the evaluation as a detection and policy layer that can sit in front of developers and CI/CD, upstream of Artifactory or Nexus, or between internal repository tiers.
+- Which team owns the enterprise repository platform.
+- Which team owns developer endpoint or network enforcement.
+- Which team owns package-source exceptions.
+- Which engineering leaders will sponsor developer migration.
+- Where the Secure Software Standard update will be tracked.
+
+## Tool Roles
+
+These tools are complementary, not interchangeable. The focused roadmap should prioritize a repository manager first; other tools may be useful as upstream sources or policy layers.
+
+| Tool or Option | Role in This Roadmap | Best Fit | What It Does Not Replace |
+| --- | --- | --- | --- |
+| JFrog Artifactory | Enterprise repository manager for hosted, proxy, cached, and grouped package repositories across many ecosystems. | Primary internal package source if Bayview wants one broad artifact and package platform across npm, PyPI, Maven, NuGet, containers, and other formats. | SCA, source code review, developer endpoint controls, or incident response. |
+| Sonatype Nexus Repository | Enterprise repository manager for hosted, proxy, cached, and grouped package repositories across common ecosystems. | Primary internal package source if Bayview prefers Sonatype workflows or has Maven-heavy practices. | SCA, source code review, developer endpoint controls, or incident response. |
+| Cloud-native package registries | Internal package hosting tied to a cloud or DevOps platform. | Specific ecosystems or teams where the cloud-native registry is already the standard and can meet Bayview policy. | A universal enterprise repository strategy across all ecosystems. |
+| Seal Security or equivalent | Curated or patched open source package source that may feed internal repositories. | Packages with difficult remediation paths or where cleanroom/backported packages reduce risk. | Repository management, network blocking, or package manager configuration. |
+| Chainguard Images or equivalent | Hardened image source that may feed an approved internal image repository. | Container base images where Bayview wants controlled, minimal, hardened upstream images. | General developer package repository management. |
+| Socket.dev or equivalent | Package-risk firewall or policy layer before packages reach developers or internal caches. | Higher-risk ecosystems where malicious packages, typosquats, risky install scripts, or suspicious maintainers are a concern. | The internal repository manager itself. |
 
 ### Artifactory vs. Nexus
 
-Artifactory and Nexus solve the same core problem: centralizing dependency and artifact access so developers and CI/CD do not pull directly from public registries. The choice should be based less on which product is "more secure" in isolation and more on which platform fits Bayview's ecosystems, operating model, security tooling, and developer experience.
+Artifactory and Nexus solve the same core problem for this roadmap: centralizing package and artifact access so developers do not pull directly from public registries. The choice should be based on ecosystem fit, operating model, existing tooling, support burden, and developer experience.
 
 | Decision Area | JFrog Artifactory | Sonatype Nexus Repository |
 | --- | --- | --- |
-| Core overlap | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and other artifacts. | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and other artifacts. |
-| Product center of gravity | Broader artifact, build metadata, release, distribution, and DevOps platform orientation across the JFrog ecosystem. | Repository management tightly aligned with Sonatype's open source governance, policy, firewall, and lifecycle ecosystem. |
-| Package and artifact strategy | Strong fit when Bayview wants one enterprise artifact system for many formats, container registries, build metadata, promotion flows, and API-driven automation. | Strong fit when Bayview wants centralized repository management with clear hosted, proxy, and group repository patterns, especially where Sonatype tooling or Maven-heavy workflows are already familiar. |
-| Security model | Best evaluated with the surrounding JFrog security stack, package curation options, access controls, audit logs, and integration with external SCA or package-risk firewall tooling. | Best evaluated with the surrounding Sonatype policy stack, Repository Firewall options, access controls, audit logs, and integration with external SCA or package-risk firewall tooling. |
-| Operations and administration | May be attractive for teams that need high-scale artifact storage, rich metadata, build traceability, replication, and distribution patterns. | May be attractive for teams that want a focused repository manager with a familiar administrative model and strong alignment to Sonatype governance workflows. |
-| Decision guidance | Prefer if Bayview standardizes on the JFrog platform, needs broad artifact lifecycle automation, or wants Artifactory to become the main system of record for builds and released artifacts. | Prefer if Bayview standardizes on the Sonatype platform, values Nexus Repository plus Sonatype policy controls, or wants a repository manager that fits existing Java/Maven-centered practices. |
+| Core overlap | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and artifacts. | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and artifacts. |
+| Product center of gravity | Broader artifact, build metadata, release, distribution, and DevOps platform orientation across the JFrog ecosystem. | Repository management aligned with Sonatype open source governance, policy, firewall, and lifecycle tooling. |
+| Package strategy | Strong fit when Bayview wants one enterprise artifact system for many formats, container registries, promotion flows, and API automation. | Strong fit when Bayview wants clear hosted, proxy, and group repository patterns, especially where Sonatype or Maven practices are familiar. |
+| Security integration | Best evaluated with JFrog security features, access controls, audit logs, and any external package-risk firewall tooling. | Best evaluated with Sonatype policy controls, Repository Firewall options, access controls, audit logs, and SCA integrations. |
+| Operations | May be attractive for high-scale artifact storage, rich metadata, build traceability, replication, and distribution patterns. | May be attractive for focused repository administration and teams already aligned to Sonatype governance workflows. |
+| Decision guidance | Prefer if Bayview standardizes on JFrog or wants Artifactory as the main artifact system of record. | Prefer if Bayview standardizes on Sonatype or wants Nexus Repository plus Sonatype policy controls. |
 
-Bayview should select one primary enterprise repository manager unless there is a clear operational reason to keep both. Running both can be justified during migration, acquisition integration, or business-unit separation, but it also creates duplicated policy, routing, exception, logging, and support work. The evaluation should include ecosystem support, HA and disaster recovery, cloud versus self-hosted deployment, authentication, audit logging, API automation, package manager client configuration, integration with Wiz and CI/CD, firewall compatibility, administrative effort, licensing, and developer friction.
+Bayview should select one primary enterprise repository manager unless there is a clear operational reason to keep both. Running both can be justified during migration, acquisition integration, or business-unit separation, but it creates duplicated policy, routing, exception, logging, and support work.
 
 ## Adoption Phases
 
-### Phase 0: Inventory and Risk Tiering
+### Phase 0: Identify Languages and Package Managers
 
 **Suggested timing:** Weeks 0-4
 
 **Objectives**
 
-- Understand where Bayview uses third-party code, where package installation occurs, and where secrets could be exposed.
-- Prioritize high-risk applications and developer workflows.
+- Understand which coding languages and package ecosystems Bayview developers use.
+- Identify where developers currently resolve packages directly from public repositories.
 
 **Actions**
 
-- Inventory repositories, package ecosystems, package managers, lockfiles, container images, CI/CD systems, and build runners.
-- Identify projects that use npm, PyPI, Maven, Gradle, NuGet, Go modules, RubyGems, container registries, operating system package managers, or shell-based installers.
-- Identify where package installation runs today: developer laptops, Codespaces, VMs, CI/CD runners, containers, production hosts, or shared servers.
-- Inventory secrets commonly available during development and build, including GitHub tokens, npm/PyPI tokens, cloud keys, SSH keys, kubeconfigs, API keys, and service account credentials.
-- Tier projects by supply chain risk:
-  - **Tier 1:** Production-bound, internet-facing, regulated, customer-data, loan-data, privileged, cloud-infrastructure, or broad internal-use systems.
-  - **Tier 2:** Internal applications, shared libraries, scheduled jobs, APIs, data pipelines, and department tools.
-  - **Tier 3:** Developer utilities, prototypes, scripts, citizen-developed tools, and lower-risk automations.
-- Identify citizen-developed and AI-assisted projects that are not yet in approved source control.
+- Use Wiz, source control, CI/CD configuration, developer documentation, endpoint telemetry, and engineering input to inventory languages and package managers.
+- Identify use of npm, PyPI, Maven, Gradle, NuGet, Go modules, RubyGems, Cargo, public container registries, operating system package managers, and shell-based installers.
+- Identify package manager configuration files such as `.npmrc`, `pip.conf`, `pyproject.toml`, `requirements.txt`, `pom.xml`, `settings.xml`, `build.gradle`, `nuget.config`, `go.mod`, `Gemfile`, `Cargo.toml`, and devcontainer or Dockerfile package installation paths.
+- Map applications and repositories to owners and stakeholder groups.
+- Prioritize high-use and high-risk ecosystems for migration first.
 
 **Exit Criteria**
 
-- Package ecosystem inventory exists for Tier 1 and Tier 2 projects.
-- High-risk local development and build workflows are identified.
-- Known unmanaged or citizen-developed projects have owners or an intake path.
-- Initial metrics are available for approved package source usage, lockfile coverage, and Wiz SCA coverage.
+- Initial language and package manager inventory exists.
+- Direct external package repository use is known for priority teams or ecosystems.
+- Owners are identified for priority repositories and developer workflows.
 
-### Phase 1: Package Source Governance
+### Phase 1: Select the Internal Repository Pattern
 
-**Suggested timing:** Weeks 4-10
+**Suggested timing:** Weeks 2-6
 
 **Objectives**
 
-- Route developers and build systems through approved package sources.
-- Create enough visibility and control to know which package versions are in use.
+- Decide how Bayview will provide internally managed package repositories.
+- Define what counts as an approved package source for each ecosystem.
 
 **Actions**
 
-- Select the enterprise package source pattern for each ecosystem, such as JFrog Artifactory, Nexus, hardened package providers, cloud-native package registries, or approved mirrors.
-- Evaluate whether Socket.dev or an equivalent package-risk firewall should sit upstream of the repository manager, downstream in developer and CI/CD workflows, or both.
-- Configure package managers to use approved repositories, proxies, mirrors, or hardened providers for npm, PyPI, Maven, NuGet, Go, container, and operating system packages where practical.
-- Block or alert on direct public package downloads in CI/CD for Tier 1 projects.
-- Require source-controlled manifests and lockfiles for production-bound repositories.
-- Define a lightweight new package request process, including package name, ecosystem, version, business purpose, license, maintainer, alternatives considered, transitive dependencies, and whether the package was suggested by an AI tool.
-- Define stable version guidance so teams do not automatically pull bleeding-edge versions unless justified.
-- Implement dependency cooldowns for high-risk ecosystems so newly published versions are delayed before use.
-- Begin recording package approval decisions in a system that AppSec, platform teams, and developers can find.
+- Select the primary enterprise repository manager or repository pattern, such as Artifactory, Nexus, cloud-native registries, or an approved combination.
+- Define hosted, proxy, mirror, and grouped repository patterns for priority ecosystems.
+- Decide whether cleanroom or hardened sources such as Seal Security or Chainguard should feed internal repositories for selected use cases.
+- Decide whether a package-risk firewall such as Socket.dev should sit upstream of the repository manager, in developer workflows, or both.
+- Define authentication, authorization, audit logging, retention, backup, disaster recovery, and platform ownership requirements.
+- Define the minimum package request workflow for packages not yet available internally.
 
 **Exit Criteria**
 
-- Tier 1 projects use approved package sources or have documented exceptions.
-- New package request process exists and is usable by developers.
-- Dependency cooldown policy is defined for npm and at least one additional ecosystem.
-- Decision is recorded on whether to pilot Socket.dev or an equivalent package-risk firewall for npm, PyPI, and CI/CD workflows.
-- Direct public downloads are visible in Tier 1 CI/CD.
+- Repository platform decision is documented.
+- Priority ecosystems have an approved internal repository pattern.
+- Platform owner, support model, and exception owner are identified.
 
-### Phase 2: Sandboxed Development Happy Path
+### Phase 2: Configure and Migrate Developer Workflows
 
-**Suggested timing:** Weeks 8-18
+**Suggested timing:** Weeks 4-12
 
 **Objectives**
 
-- Reduce the blast radius of compromised packages by moving risky development and package installation away from broad-access laptops.
-- Give developers an approved environment that does not slow normal work to a crawl.
+- Make internal package repositories the default developer path.
+- Reduce migration friction before broad blocking begins.
 
 **Actions**
 
-- Pilot GitHub Codespaces, stripped-down VMs, sandboxed build containers, or equivalent isolated environments with Tier 1 teams.
-- Build standard development environment images that include approved package manager configuration, IDE support, debugging tools, language runtimes, certificate trust, and deployment tooling.
-- Define how approved tools are requested, installed, patched, and removed in sandboxed environments.
-- Limit secrets available in sandboxed environments to the minimum required for the project.
-- Prefer short-lived credentials, scoped tokens, and environment-specific access over long-lived personal API keys.
-- Restrict package installation and build steps from accessing unrelated local files, personal directories, broad cloud credentials, or administrative tokens.
-- Create a phased strategy to restrict or prohibit local laptop development for Tier 1 projects after the sandboxed happy path is proven.
-- Define exception handling for emergency fixes, offline work, specialized hardware, or workflows that cannot yet run in the sandbox.
+- Publish standard package manager configuration for priority ecosystems.
+- Update approved developer environment images, onboarding documentation, and repository templates to use internal repositories.
+- Cache or pre-stage commonly used packages needed by priority teams.
+- Update source-controlled configuration where appropriate, such as `.npmrc`, `pip.conf`, `settings.xml`, `nuget.config`, and container registry settings.
+- Create a support channel for missing packages, broken builds, authentication issues, and migration questions.
+- Track teams and repositories that have migrated.
 
 **Exit Criteria**
 
-- At least one Tier 1 team can perform normal development in the approved sandboxed environment.
-- Required developer tools can be installed through a documented process.
-- Secrets available during development are reduced and scoped.
-- Policy direction is approved for restricting high-risk local laptop development.
+- Priority developer workflows can install packages from internal repositories.
+- Common package manager setup is documented.
+- Missing package requests have a usable intake process.
 
-### Phase 3: Hardened Packages and Minimal Containers
+### Phase 3: Block Direct External Package Repository Access
 
-**Suggested timing:** Weeks 12-24
+**Suggested timing:** Weeks 8-16
 
 **Objectives**
 
-- Reduce exposure from compromised dependencies, vulnerable packages, bloated container images, and difficult-to-upgrade software.
-- Standardize safe runtime patterns for applications.
+- Move from guidance to enforcement.
+- Prevent developers from bypassing internally managed repositories.
 
 **Actions**
 
-- Evaluate hardened package and container providers such as Seal Security, Chainguard, or equivalent approved services.
-- Identify use cases where cleanroom-built, hardened, or backported packages are most valuable:
-  - Critical vulnerabilities with no safe upstream upgrade path.
-  - Legacy applications that cannot quickly absorb breaking changes.
-  - Production services with strict remediation SLAs.
-  - Base images with recurring vulnerability debt.
-- Document the limitation that hardened package services can reduce dependency compromise and vulnerability exposure, but they do not eliminate the need to protect source control, CI/CD, maintainer credentials, and build workflows from tampering.
-- Encourage containerization for applications where it improves runtime consistency and isolation.
-- Publish approved base image guidance, favoring minimal images such as Alpine, distroless, Chainguard Images, or other approved hardened images when compatible with the application.
-- Remove unnecessary shells, package managers, build tools, network tools, and debugging utilities from production runtime images where practical.
-- Require container image definitions, manifests, and lockfiles to be stored in source control.
-- Add container scanning and base image update expectations to the standard AppSec process.
+- Create an allowlist of approved internal package repositories and approved exceptions.
+- Use endpoint, DNS, proxy, firewall, CASB, or network egress controls to block direct access to public package repositories where practical.
+- Alert before blocking for selected pilot teams if needed to reduce disruption.
+- Enforce internal repository use in developer workstations, virtual desktops, Codespaces or dev containers, and development-related CI jobs where applicable.
+- Review direct-download patterns such as curl-to-shell installers, GitHub release downloads, public container pulls, and package manager fallback behavior.
+- Document emergency and vendor-specific exception paths.
 
 **Exit Criteria**
 
-- Hardened package and container provider evaluation is complete.
-- Approved base image catalog or guidance exists.
-- Tier 1 containerized services have a plan to move to approved minimal or hardened base images.
-- Critical vulnerability remediation process includes backported or hardened package options when appropriate.
+- Priority developer groups are blocked from direct public package repository access or have approved exceptions.
+- External package repository bypass attempts are visible.
+- Exceptions are time-bound and assigned to owners.
 
-### Phase 4: Enforcement and Engineering Controls
-
-**Suggested timing:** Months 5-8
-
-**Objectives**
-
-- Move from guidance to enforceable controls for high-risk projects.
-- Prevent unsafe package sources and unmanaged dependencies from reaching production.
-
-**Actions**
-
-- Require Tier 1 CI/CD pipelines to use approved package sources.
-- Add Wiz SCA, secrets, IaC, container, and CI/CD posture checks where supported.
-- Block new critical dependency findings, exposed secrets, and direct public download patterns in Tier 1 production-bound pipelines after policy tuning.
-- Require review for new direct dependencies, major version upgrades, newly published packages, and AI-suggested packages.
-- Where a package-risk firewall is selected, tune and enforce policies for known malware, high-confidence suspicious behavior, typosquats, dependency confusion, and direct public downloads.
-- Require source-controlled manifests and lockfiles before release.
-- Enforce branch protection or pipeline controls so dependency and package-source checks cannot be silently skipped.
-- Create time-bound exceptions for packages, versions, sources, or development workflows that cannot yet meet the standard.
-- Report policy violations to engineering leadership and repository owners.
-
-**Exit Criteria**
-
-- Tier 1 repositories enforce approved package source usage or have approved exceptions.
-- Tier 1 releases cannot proceed with unreviewed critical package risk without exception.
-- Lockfile and manifest coverage is measurable.
-- Wiz and package source data can be mapped to application and team ownership.
-
-### Phase 5: Reactive Defense and Incident Readiness
+### Phase 4: Operate, Measure, and Expand
 
 **Suggested timing:** Months 4-8 and ongoing
 
 **Objectives**
 
-- Make Bayview fast at answering: "Are we affected by this package, version, campaign, indicator, or behavior?"
-- Reduce response time when a compromised dependency reaches a developer environment, build runner, or application.
+- Keep the control working after migration.
+- Expand from priority teams to the broader developer population.
 
 **Actions**
 
-- Create a supply chain incident runbook owned by SOC, AppSec, Cloud Security, Platform Engineering, and affected application teams.
-- Use Wiz Code, Wiz Mika or equivalent investigation capabilities, package source data, source control history, lockfiles, CI/CD logs, endpoint telemetry, and cloud logs to determine exposure.
-- Define standard investigation questions:
-  - Are we using the compromised package or version?
-  - Was it installed on a developer laptop, sandboxed environment, CI/CD runner, container image, or production host?
-  - What secrets were available in that environment?
-  - Did the environment contact known suspicious hostnames or IP addresses?
-  - Were suspicious files written to disk?
-  - Did build scripts, install hooks, or package imports execute unexpected code?
-  - Were repositories, workflows, package publishing tokens, or cloud credentials modified?
-- Create a credential rotation playbook for GitHub, package registries, cloud providers, CI/CD systems, SSH keys, API keys, service accounts, and developer tokens.
-- Define when affected environments must be destroyed and rebuilt rather than cleaned in place.
-- Preserve evidence from package manifests, lockfiles, CI/CD logs, endpoint telemetry, network logs, and affected environments.
-- Run tabletop exercises using a Shai-Hulud-style scenario where a trusted package steals developer and CI/CD secrets.
+- Review internal repository logs, block logs, exception lists, and package request volume.
+- Expand internal repository requirements to remaining developer groups and ecosystems.
+- Tune package availability, caching, authentication, and documentation based on developer feedback.
+- Periodically review whether Seal Security, Chainguard, Socket.dev, or equivalent services should be added for specific upstream risk reduction.
+- Update the Secure Software Standard to require developers to use only approved internally managed package repositories.
+- Report progress to engineering and security leadership.
 
 **Exit Criteria**
 
-- SOC and AppSec can answer exposure questions for Tier 1 projects within an agreed response window.
-- Credential rotation paths are documented and tested.
-- IoC hunting covers hostnames, IP addresses, filesystem artifacts, build logs, and unusual package install behavior.
-- A supply chain tabletop has been completed and action items are tracked.
+- Internal repository usage is standard across active developer teams.
+- Direct public package repository access is blocked by default for developer package manager traffic.
+- Exceptions are reviewed and trending down.
+- The Secure Software Standard contains the internal package repository requirement.
 
-### Phase 6: Enterprise Expansion and Optimization
+## Minimum Policy Language
 
-**Suggested timing:** Months 8-12 and ongoing
-
-**Objectives**
-
-- Expand controls beyond the highest-risk teams.
-- Improve developer experience while steadily reducing attack surface.
-
-**Actions**
-
-- Expand approved package source requirements to Tier 2 repositories.
-- Expand sandboxed development requirements based on data sensitivity, credential exposure, and production adjacency.
-- Bring citizen-developed and vibe-coded projects into source control, scanning, package governance, and ownership review.
-- Use Wiz and repository manager data to identify repeated vulnerable packages, risky child dependencies, direct public downloads, missing lockfiles, and unmanaged package ecosystems.
-- Refine dependency cooldown windows by ecosystem and business need.
-- Reduce exception volume by improving package availability, approved base images, and developer environment tooling.
-- Publish recurring metrics and progress to engineering leadership.
-
-**Exit Criteria**
-
-- Supply chain controls are standard across active engineering teams.
-- Citizen-developed tools have a practical path into approved source control and scanning.
-- Exceptions are time-bound, reviewed, and trending down.
-- Package risk, local development risk, and incident readiness are included in AppSec governance reporting.
-
-## Proactive Defense Workstreams
-
-### Sandboxed Development
-
-Bayview should move high-risk development toward isolated environments such as GitHub Codespaces, stripped-down VMs, sandboxed build containers, or dedicated CI/CD runners. This reduces the damage when a malicious package executes during install, build, test, import, or runtime.
-
-The roadmap should not rely on an immediate laptop-development ban before the alternative is ready. The practical sequence is:
-
-1. Build a usable happy path.
-2. Pilot it with high-risk teams.
-3. Move package installation and deployment workflows into the sandbox.
-4. Reduce secrets available on local laptops.
-5. Restrict or prohibit local laptop development for Tier 1 projects.
-6. Expand restrictions based on risk and readiness.
-
-### Developer Happy Path
-
-Sandboxed development will only work if developers have the tools they need. Bayview should maintain standard environment definitions that include approved language runtimes, package manager configuration, IDE support, debugging tools, test tools, certificate trust, deployment utilities, and documented support.
-
-Tool installation should have a clear request and approval process. Otherwise, developers will experience the sandbox as friction and try to return to unmanaged local workflows.
-
-### Local Laptop Development Restrictions
-
-A complete ban on local laptop development is a major operational control and should be handled as a phased program rather than a surprise mandate. The roadmap direction should be clear: Tier 1 projects should stop relying on laptop-local development once Codespaces, stripped-down VMs, or equivalent sandboxed environments are ready.
-
-After Tier 1 adoption is stable, Bayview should evaluate whether the local development ban should expand to additional project tiers based on credential exposure, data sensitivity, production access, and developer experience maturity.
-
-### Cleanroom, Hardened, and Backported Packages
-
-Services such as Seal Security, Chainguard, or equivalent approved providers should be evaluated for:
-
-- Building or sourcing packages from controlled cleanroom environments instead of relying directly on public registry artifacts from npm, PyPI, Maven, or other ecosystems.
-- Reducing exposure when a child dependency is compromised.
-- Providing hardened container images or packages with fewer unnecessary components.
-- Providing backported CVE fixes when direct upstream upgrades are risky or time-consuming.
-
-These services can reduce dependency compromise and vulnerability risk, but they do not fully protect against upstream source code tampering, malicious maintainer behavior, compromised CI/CD workflows, or attacks against Bayview's own source control. They should complement source control protections, CI/CD hardening, maintainer account security, code review, and incident response.
-
-### Repository Management
-
-Bayview should use repository management platforms such as Nexus, JFrog Artifactory, or approved equivalents to improve package visibility and control.
-
-Repository management should support:
-
-- Approved package sources for each ecosystem.
-- Version pinning or approved version ranges.
-- Audit logs of package downloads.
-- Visibility into packages used by developers and CI/CD.
-- Blocking or alerting on known malicious, suspicious, unlicensed, or critically vulnerable packages.
-- Dependency cooldowns for newly published versions.
-- Stable-version defaults for production-bound software.
-
-### Package Risk Firewall
-
-Bayview should evaluate Socket.dev or an equivalent install-time package-risk firewall as a complement to repository management. Repository managers control package routing, caching, access, and auditability. A package-risk firewall adds a policy decision before a package is downloaded or admitted into the internal package path.
-
-This is most useful for npm, PyPI, Maven, NuGet, Go, RubyGems, Cargo, and other ecosystems where malicious packages, typosquats, dependency confusion, risky install scripts, abandoned packages, or unusual maintainer behavior can create risk before a traditional CVE exists.
-
-Evaluation questions should include:
-
-- Can the tool sit upstream of Artifactory or Nexus so public packages are checked before entering the internal repository cache?
-- Can it protect developer workstations, Codespaces, sandboxed VMs, and CI/CD runners without creating fragile package manager configuration?
-- Which ecosystems and package managers are fully supported for Bayview's current stack?
-- Can policy distinguish between known malware, suspicious behavior, newly published packages, license issues, and ordinary CVEs?
-- How are false positives, allowlists, emergency exceptions, audit logs, and developer experience handled?
-- What telemetry leaves Bayview environments, and can usage data be governed consistently with internal privacy and vendor-risk requirements?
-
-### Dependency Cooldowns
-
-Dependency cooldowns delay use of newly published package versions so the public ecosystem, security vendors, and maintainers have time to detect malicious releases.
-
-Cooldowns are most useful when:
-
-- Teams otherwise auto-update to the newest dependency version.
-- A package has install scripts or build-time execution.
-- A package has broad transitive reach.
-- A package is used in CI/CD, developer tooling, or production infrastructure.
-
-Bayview should start with npm, then expand to PyPI and other ecosystems where tooling supports it.
-
-### Containerization and Minimal Images
-
-Containerization can reduce supply chain risk when it standardizes runtime dependencies and removes unnecessary packages. Teams should prefer minimal approved base images and avoid shipping build tools, shells, package managers, network tools, and debugging utilities in production images unless required.
-
-Fewer binaries and fewer dependencies reduce vulnerability exposure and may limit what an attacker can do if a malicious package runs inside the container.
-
-## Reactive Defense Workstreams
-
-### Exposure Analysis
-
-When a new campaign is reported, the SOC and AppSec teams should use Wiz Code, Wiz Mika or equivalent investigation capabilities, repository manager data, package-risk firewall logs, lockfiles, SBOMs, source control search, and CI/CD logs to determine whether Bayview uses the affected package, version, image, or workflow.
-
-### Indicator Hunting
-
-Reactive detection should include searches for indicators of compromise such as:
-
-- Suspicious hostnames or IP addresses.
-- Unexpected files written during package install, build, import, or test.
-- Unusual outbound connections from developer environments, CI/CD runners, containers, or build hosts.
-- Unexpected package install scripts or import-time execution.
-- Modified repository settings, workflow files, publishing tokens, or package registry credentials.
-- New public repositories, unexpected forks, or unusual source control activity.
-
-### Credential Response
-
-If a compromised package executed in an environment that had secrets, Bayview should assume those secrets may be exposed until proven otherwise.
-
-Credential response should include:
-
-- Identify what secrets were present in the affected environment.
-- Rotate exposed or potentially exposed tokens.
-- Revoke unused or over-scoped credentials.
-- Review audit logs for use of the exposed credentials.
-- Replace long-lived personal credentials with short-lived, scoped, environment-specific credentials where possible.
-
-### Rebuild and Recovery
-
-Affected environments should be rebuilt from trusted sources when compromise is plausible. This includes developer sandboxes, CI/CD runners, build containers, and application images. Production redeployments should use clean package sources, approved versions, updated lockfiles, and validated build pipelines.
+Developers must configure package managers and development environments to resolve packages only from Bayview-approved internally managed package repositories. Direct resolution from external public package repositories is prohibited unless an approved, documented, time-bound exception exists.
 
 ## Metrics
 
-- Percentage of Tier 1 and Tier 2 repositories with source-controlled manifests and lockfiles.
-- Percentage of repositories using approved package sources.
-- Number of direct public package downloads detected in CI/CD.
-- Number of new package requests submitted, approved, denied, or excepted.
-- Percentage of high-risk projects using sandboxed development environments.
-- Number of long-lived developer secrets removed or replaced with scoped credentials.
-- Percentage of Tier 1 applications using approved minimal or hardened base images.
-- Number of critical package vulnerabilities remediated through upgrade, removal, replacement, hardened package, backported fix, or exception.
-- Number of packages blocked or delayed by dependency cooldowns.
-- Number of package-risk firewall blocks, warnings, allowlist overrides, and false-positive exceptions.
-- Mean time to answer whether Bayview is affected by a reported package campaign.
-- Mean time to rotate exposed credentials during supply chain incidents.
-- Number of open exceptions by owner, age, and expiration date.
+- Percentage of developer package downloads served by internally managed repositories.
+- Number of direct public package repository access attempts blocked or alerted.
+- Percentage of priority repositories with approved package manager configuration.
+- Number of ecosystems migrated to internal repositories.
+- Number of missing package requests opened, approved, denied, and aged.
+- Number of package source exceptions by owner, age, and expiration date.
+- Mean time to fulfill approved package availability requests.
+- Number of developer teams migrated to internal repository use.
 
 ## Open Decisions
 
-- Which platform should be the primary approved package source for each ecosystem?
-- Should Bayview pilot Socket.dev or an equivalent package-risk firewall, and should it run upstream of Artifactory/Nexus, downstream for developers and CI/CD, or both?
-- Which ecosystems should receive dependency cooldowns first, and what cooldown window should apply?
-- Which teams should pilot Codespaces, stripped-down VMs, or sandboxed build containers?
-- What is the target date for restricting local laptop development for Tier 1 projects?
-- Which secrets are allowed in developer environments, sandboxes, CI/CD runners, and package publish workflows?
-- Which hardened package or container provider should Bayview evaluate first?
-- Where will package approvals, exceptions, and risk acceptances be recorded?
-- What response-time objective should SOC and AppSec use for exposure analysis during a public campaign?
+- Which repository manager or repository pattern should be the primary enterprise standard?
+- Which ecosystems should migrate first?
+- Which public package repositories and package manager endpoints should be blocked first?
+- Which team owns repository administration and developer support?
+- Which team owns network, DNS, endpoint, or proxy enforcement?
+- Where will package source exceptions be recorded and reviewed?
+- Should Seal Security, Chainguard, Socket.dev, or equivalent services be included in the initial rollout or evaluated later?
+- What target date should Bayview set for blocking direct external package repository access?
 
 ## References
 
+- [SCRATCH Developer Supply Chain Security](<SCRATCH Developer Supply Chain Security.md>)
 - [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>)
-- [Citizen Developers and Vibe Coders](<CITIZEN-DEVELOPERS-VIBE-CODERS.md>)
-- [Dependency Cooldowns](https://cooldowns.dev/)
-- [Akamai: Mini Shai-Hulud Worm Returns and Goes Public](https://www.akamai.com/blog/security-research/mini-shai-hulud-worm-returns-goes-public)
-- [Microsoft: Shai-Hulud 2.0 Guidance](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/)
-- [ReversingLabs: Shai-Hulud Code Drop](https://www.reversinglabs.com/blog/the-shai-hulud-code-drop)
 - [Seal Security](https://www.seal.security/product)
 - [Chainguard Images](https://images.chainguard.dev/)
 - [Socket.dev Firewall](https://docs.socket.dev/docs/socket-firewall-overview)
