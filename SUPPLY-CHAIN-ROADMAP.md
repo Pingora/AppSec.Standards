@@ -55,6 +55,21 @@ These tools are complementary, not interchangeable. Artifactory and Nexus are re
 
 Artifactory and Nexus should generally be treated as a platform selection decision: Bayview may not need both as primary enterprise repository managers unless different business units already depend on them. Chainguard and Seal Security can be evaluated independently because they solve different problems: hardened runtime inputs versus backported vulnerability remediation. Socket.dev or an equivalent tool belongs in the evaluation as a detection and policy layer that can sit in front of developers and CI/CD, upstream of Artifactory or Nexus, or between internal repository tiers.
 
+### Artifactory vs. Nexus
+
+Artifactory and Nexus solve the same core problem: centralizing dependency and artifact access so developers and CI/CD do not pull directly from public registries. The choice should be based less on which product is "more secure" in isolation and more on which platform fits Bayview's ecosystems, operating model, security tooling, and developer experience.
+
+| Decision Area | JFrog Artifactory | Sonatype Nexus Repository |
+| --- | --- | --- |
+| Core overlap | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and other artifacts. | Universal repository manager for internal packages, third-party dependencies, build outputs, containers, and other artifacts. |
+| Product center of gravity | Broader artifact, build metadata, release, distribution, and DevOps platform orientation across the JFrog ecosystem. | Repository management tightly aligned with Sonatype's open source governance, policy, firewall, and lifecycle ecosystem. |
+| Package and artifact strategy | Strong fit when Bayview wants one enterprise artifact system for many formats, container registries, build metadata, promotion flows, and API-driven automation. | Strong fit when Bayview wants centralized repository management with clear hosted, proxy, and group repository patterns, especially where Sonatype tooling or Maven-heavy workflows are already familiar. |
+| Security model | Best evaluated with the surrounding JFrog security stack, package curation options, access controls, audit logs, and integration with external SCA or package-risk firewall tooling. | Best evaluated with the surrounding Sonatype policy stack, Repository Firewall options, access controls, audit logs, and integration with external SCA or package-risk firewall tooling. |
+| Operations and administration | May be attractive for teams that need high-scale artifact storage, rich metadata, build traceability, replication, and distribution patterns. | May be attractive for teams that want a focused repository manager with a familiar administrative model and strong alignment to Sonatype governance workflows. |
+| Decision guidance | Prefer if Bayview standardizes on the JFrog platform, needs broad artifact lifecycle automation, or wants Artifactory to become the main system of record for builds and released artifacts. | Prefer if Bayview standardizes on the Sonatype platform, values Nexus Repository plus Sonatype policy controls, or wants a repository manager that fits existing Java/Maven-centered practices. |
+
+Bayview should select one primary enterprise repository manager unless there is a clear operational reason to keep both. Running both can be justified during migration, acquisition integration, or business-unit separation, but it also creates duplicated policy, routing, exception, logging, and support work. The evaluation should include ecosystem support, HA and disaster recovery, cloud versus self-hosted deployment, authentication, audit logging, API automation, package manager client configuration, integration with Wiz and CI/CD, firewall compatibility, administrative effort, licensing, and developer friction.
+
 ## Adoption Phases
 
 ### Phase 0: Inventory and Risk Tiering
