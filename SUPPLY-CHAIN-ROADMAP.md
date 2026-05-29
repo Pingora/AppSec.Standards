@@ -42,6 +42,19 @@ Bayview should treat this as a warning about attacker repeatability. It is not r
 - **Fix without breaking where possible.** Backported fixes and hardened packages can reduce vulnerability exposure when a direct upstream upgrade would cause application risk.
 - **Keep citizen-developed code visible.** Scripts, automations, vibe-coded tools, and low-code projects can introduce the same dependency and credential risks as formal applications.
 
+## Tools Breakdown
+
+These tools are complementary, not interchangeable. Artifactory and Nexus are repository managers that help control where packages and artifacts come from. Chainguard and Seal Security reduce vulnerability and compromise exposure by changing what Bayview runs or consumes. Socket.dev should also be considered as a package-risk firewall and developer-workflow control, especially for blocking malicious or suspicious packages before they reach developer workstations or CI/CD.
+
+| Tool | Category | What It Actually Does | What It Defends Against | Best Fit in This Roadmap | What It Does Not Replace |
+| --- | --- | --- | --- | --- | --- |
+| JFrog Artifactory | Universal artifact and package repository manager | Hosts internal packages and build artifacts, proxies and caches public registries, supports many package and container formats, provides metadata, access control, and auditability for artifact use. | Direct public downloads, unmanaged package sources, dependency confusion risk when routing is configured correctly, untracked artifact movement, and lack of visibility into what developers and CI/CD are pulling. | Primary approved package source for developers and CI/CD, especially where Bayview wants one enterprise repository pattern across npm, PyPI, Maven, NuGet, containers, and other formats. | SCA tools, malicious package judgment by itself, source code review, hardened base images, or incident response. |
+| Sonatype Nexus Repository | Universal artifact and package repository manager | Provides hosted, proxy, and grouped repositories for common package ecosystems so teams can centralize dependency access instead of downloading directly from public registries. | Direct public downloads, unmanaged package sources, dependency confusion risk when routing is configured correctly, inconsistent repository use, and limited auditability of package consumption. | Alternative primary package source to Artifactory, especially if Sonatype tooling or Maven-heavy workflows are already preferred. | SCA tools, malicious package judgment by itself, source code review, hardened base images, or incident response. |
+| Chainguard | Hardened container image provider | Provides minimal, hardened container images built for reduced attack surface, frequent rebuilds, supply chain metadata, and lower vulnerability counts compared with broad general-purpose base images. | Bloated runtime images, stale OS packages, unnecessary shells and tools in production containers, excessive CVE noise, and opaque base image provenance. | Approved base image catalog for Tier 1 services and containerized workloads where Bayview wants fewer OS packages, fewer runtime tools, SBOM support, and faster base image remediation. | A repository manager, application dependency approval, package ingestion firewall, or complete replacement for application testing. |
+| Seal Security | Open source vulnerability remediation and backported patch provider | Produces patched versions of vulnerable open source dependencies, OS packages, and container components so teams can remediate CVEs without always taking upstream upgrades or breaking changes. | Known CVEs in direct and transitive dependencies, legacy or EOL components with no easy upgrade path, vulnerable OS packages, and remediation delays caused by breaking upstream upgrades. | Legacy, hard-to-upgrade, regulated, or SLA-sensitive applications where direct dependency upgrades are risky but critical and high vulnerabilities still need fast remediation. | A repository manager, install-time malware blocking, source control protection, CI/CD hardening, or normal upgrade planning. |
+
+Artifactory and Nexus should generally be treated as a platform selection decision: Bayview may not need both as primary enterprise repository managers unless different business units already depend on them. Chainguard and Seal Security can be evaluated independently because they solve different problems: hardened runtime inputs versus backported vulnerability remediation. Socket.dev or an equivalent tool belongs in the evaluation as a detection and policy layer that can sit in front of developers and CI/CD, upstream of Artifactory or Nexus, or between internal repository tiers.
+
 ## Adoption Phases
 
 ### Phase 0: Inventory and Risk Tiering
@@ -84,6 +97,7 @@ Bayview should treat this as a warning about attacker repeatability. It is not r
 **Actions**
 
 - Select the enterprise package source pattern for each ecosystem, such as JFrog Artifactory, Nexus, hardened package providers, cloud-native package registries, or approved mirrors.
+- Evaluate whether Socket.dev or an equivalent package-risk firewall should sit upstream of the repository manager, downstream in developer and CI/CD workflows, or both.
 - Configure package managers to use approved repositories, proxies, mirrors, or hardened providers for npm, PyPI, Maven, NuGet, Go, container, and operating system packages where practical.
 - Block or alert on direct public package downloads in CI/CD for Tier 1 projects.
 - Require source-controlled manifests and lockfiles for production-bound repositories.
@@ -97,6 +111,7 @@ Bayview should treat this as a warning about attacker repeatability. It is not r
 - Tier 1 projects use approved package sources or have documented exceptions.
 - New package request process exists and is usable by developers.
 - Dependency cooldown policy is defined for npm and at least one additional ecosystem.
+- Decision is recorded on whether to pilot Socket.dev or an equivalent package-risk firewall for npm, PyPI, and CI/CD workflows.
 - Direct public downloads are visible in Tier 1 CI/CD.
 
 ### Phase 2: Sandboxed Development Happy Path
@@ -172,6 +187,7 @@ Bayview should treat this as a warning about attacker repeatability. It is not r
 - Add Wiz SCA, secrets, IaC, container, and CI/CD posture checks where supported.
 - Block new critical dependency findings, exposed secrets, and direct public download patterns in Tier 1 production-bound pipelines after policy tuning.
 - Require review for new direct dependencies, major version upgrades, newly published packages, and AI-suggested packages.
+- Where a package-risk firewall is selected, tune and enforce policies for known malware, high-confidence suspicious behavior, typosquats, dependency confusion, and direct public downloads.
 - Require source-controlled manifests and lockfiles before release.
 - Enforce branch protection or pipeline controls so dependency and package-source checks cannot be silently skipped.
 - Create time-bound exceptions for packages, versions, sources, or development workflows that cannot yet meet the standard.
@@ -295,6 +311,21 @@ Repository management should support:
 - Dependency cooldowns for newly published versions.
 - Stable-version defaults for production-bound software.
 
+### Package Risk Firewall
+
+Bayview should evaluate Socket.dev or an equivalent install-time package-risk firewall as a complement to repository management. Repository managers control package routing, caching, access, and auditability. A package-risk firewall adds a policy decision before a package is downloaded or admitted into the internal package path.
+
+This is most useful for npm, PyPI, Maven, NuGet, Go, RubyGems, Cargo, and other ecosystems where malicious packages, typosquats, dependency confusion, risky install scripts, abandoned packages, or unusual maintainer behavior can create risk before a traditional CVE exists.
+
+Evaluation questions should include:
+
+- Can the tool sit upstream of Artifactory or Nexus so public packages are checked before entering the internal repository cache?
+- Can it protect developer workstations, Codespaces, sandboxed VMs, and CI/CD runners without creating fragile package manager configuration?
+- Which ecosystems and package managers are fully supported for Bayview's current stack?
+- Can policy distinguish between known malware, suspicious behavior, newly published packages, license issues, and ordinary CVEs?
+- How are false positives, allowlists, emergency exceptions, audit logs, and developer experience handled?
+- What telemetry leaves Bayview environments, and can usage data be governed consistently with internal privacy and vendor-risk requirements?
+
 ### Dependency Cooldowns
 
 Dependency cooldowns delay use of newly published package versions so the public ecosystem, security vendors, and maintainers have time to detect malicious releases.
@@ -318,7 +349,7 @@ Fewer binaries and fewer dependencies reduce vulnerability exposure and may limi
 
 ### Exposure Analysis
 
-When a new campaign is reported, the SOC and AppSec teams should use Wiz Code, Wiz Mika or equivalent investigation capabilities, repository manager data, lockfiles, SBOMs, source control search, and CI/CD logs to determine whether Bayview uses the affected package, version, image, or workflow.
+When a new campaign is reported, the SOC and AppSec teams should use Wiz Code, Wiz Mika or equivalent investigation capabilities, repository manager data, package-risk firewall logs, lockfiles, SBOMs, source control search, and CI/CD logs to determine whether Bayview uses the affected package, version, image, or workflow.
 
 ### Indicator Hunting
 
@@ -358,6 +389,7 @@ Affected environments should be rebuilt from trusted sources when compromise is 
 - Percentage of Tier 1 applications using approved minimal or hardened base images.
 - Number of critical package vulnerabilities remediated through upgrade, removal, replacement, hardened package, backported fix, or exception.
 - Number of packages blocked or delayed by dependency cooldowns.
+- Number of package-risk firewall blocks, warnings, allowlist overrides, and false-positive exceptions.
 - Mean time to answer whether Bayview is affected by a reported package campaign.
 - Mean time to rotate exposed credentials during supply chain incidents.
 - Number of open exceptions by owner, age, and expiration date.
@@ -365,6 +397,7 @@ Affected environments should be rebuilt from trusted sources when compromise is 
 ## Open Decisions
 
 - Which platform should be the primary approved package source for each ecosystem?
+- Should Bayview pilot Socket.dev or an equivalent package-risk firewall, and should it run upstream of Artifactory/Nexus, downstream for developers and CI/CD, or both?
 - Which ecosystems should receive dependency cooldowns first, and what cooldown window should apply?
 - Which teams should pilot Codespaces, stripped-down VMs, or sandboxed build containers?
 - What is the target date for restricting local laptop development for Tier 1 projects?
@@ -382,6 +415,7 @@ Affected environments should be rebuilt from trusted sources when compromise is 
 - [Microsoft: Shai-Hulud 2.0 Guidance](https://www.microsoft.com/en-us/security/blog/2025/12/09/shai-hulud-2-0-guidance-for-detecting-investigating-and-defending-against-the-supply-chain-attack/)
 - [ReversingLabs: Shai-Hulud Code Drop](https://www.reversinglabs.com/blog/the-shai-hulud-code-drop)
 - [Seal Security](https://www.seal.security/product)
-- [Chainguard Images](https://images.prod.chainguard.app/)
+- [Chainguard Images](https://images.chainguard.dev/)
+- [Socket.dev Firewall](https://docs.socket.dev/docs/socket-firewall-overview)
 - [JFrog Artifactory](https://docs.jfrog.com/artifactory/docs/jfrog-artifactory)
 - [Sonatype Nexus Repository](https://help.sonatype.com/en/sonatype-nexus-repository.html)
