@@ -52,6 +52,8 @@ It does not include direct developer access to public package registries or rand
 - Developers resolve packages only from approved internal repositories.
 - Public package repositories are blocked by default for developer package manager traffic.
 - Internal repositories provide package caching, access control, audit logs, and a central place to enforce policy.
+- A repository firewall or equivalent package-risk policy layer evaluates packages before they become available to developers through internal repositories.
+- Dependency cooldowns or equivalent delay controls prevent newly published public package versions from being consumed immediately.
 - Common ecosystems have documented setup instructions and default configuration.
 - New or missing package requests have a lightweight intake path.
 - Exceptions are time-bound, owned, reviewed, and visible to AppSec and platform teams.
@@ -63,7 +65,35 @@ It does not include direct developer access to public package registries or rand
 - **Make the internal path usable.** Developers need working package manager configuration, documentation, common package availability, and fast support.
 - **Block with visibility.** Start with logging and pilot enforcement where needed, but the end state is to prevent direct external repository use.
 - **Prefer a consistent platform pattern.** Artifactory and Nexus solve similar repository-management problems; Bayview should avoid duplicate enterprise patterns unless there is a clear reason.
+- **Use equivalent capabilities where appropriate.** Sonatype tools are named because they directly support the repository-control pattern, but equivalent tools are acceptable if they meet Bayview's control, logging, enforcement, and developer experience requirements.
 - **Keep exceptions narrow.** Exceptions should identify the owner, ecosystem, package source, reason, compensating controls, and expiration date.
+
+## Required Capabilities
+
+The roadmap needs these capabilities, whether delivered by the named product or an equivalent tool.
+
+| Capability | Example Tool | Why Bayview Needs It |
+| --- | --- | --- |
+| Internal package repository management | Sonatype Nexus Repository or equivalent | Developers need a Bayview-managed place to resolve packages from, so package access can be centralized, cached, logged, authenticated, and disconnected from direct public registry access. |
+| Repository firewall / package admission control | Sonatype Repository Firewall or equivalent | Blocking public registries is necessary but not sufficient; Bayview also needs a control point that can evaluate, quarantine, or block risky packages before they enter the internal repository path. |
+| Dependency cooldowns | Dependency cooldown tooling, repository policy, or equivalent | Newly published package versions are high-risk during the first hours or days after release; cooldowns give maintainers, vendors, and the security community time to detect malicious or compromised releases before Bayview developers consume them. |
+
+## Supported Package Managers
+
+The initial SCA language inventory should drive which package managers and repository formats Bayview supports first. These counts are a starting signal for prioritization, not a substitute for repository-level discovery of manifests, lockfiles, CI/CD scripts, Dockerfiles, and developer workstation configuration.
+
+| SCA Language | Count | Package Managers and Sources Commonly Found With This Language |
+| --- | ---: | --- |
+| Unknown | 47584 | Investigate with source control, Wiz, CI/CD, endpoint, and container data. Unknown language findings may still include package resolution through Dockerfiles, shell installers, OS package managers, vendored dependencies, GitHub release downloads, or package manager config files that SCA did not classify cleanly. |
+| PYTHON | 1795 | `pip`, `pip-tools`, `Poetry`, `Pipenv`, `PDM`, `uv`, `Conda`, and private Python package indexes. |
+| GO | 1625 | Go modules through `go`, `GOPROXY`, private module proxies, vendored modules, and direct VCS module resolution. |
+| CSHARP | 1462 | `NuGet`, `dotnet restore`, Visual Studio package restore, private NuGet feeds, and Azure Artifacts feeds where applicable. |
+| JAVASCRIPT | 1245 | `npm`, `Yarn`, `pnpm`, private npm registries, and package manager lockfiles such as `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`. |
+| JAVA | 1017 | `Maven`, `Gradle`, private Maven repositories, internal artifact repositories, and repository settings in `settings.xml`, `pom.xml`, and Gradle configuration. |
+| RUBY | 32 | `RubyGems`, `Bundler`, private gem servers, and `Gemfile.lock`. |
+| RUST | 1 | `Cargo`, crates.io-compatible registries, private Cargo registries, and `Cargo.lock`. |
+
+Cross-cutting package sources such as public container registries, operating system package managers, and curl-to-shell installers should be handled even when they do not map cleanly to a single SCA language.
 
 ## Stakeholder Alignment
 
@@ -84,8 +114,10 @@ These tools are complementary, not interchangeable. The focused roadmap should p
 | Tool or Option | Role in This Roadmap | Best Fit | What It Does Not Replace |
 | --- | --- | --- | --- |
 | JFrog Artifactory | Enterprise repository manager for hosted, proxy, cached, and grouped package repositories across many ecosystems. | Primary internal package source if Bayview wants one broad artifact and package platform across npm, PyPI, Maven, NuGet, containers, and other formats. | SCA, source code review, developer endpoint controls, or incident response. |
-| Sonatype Nexus Repository | Enterprise repository manager for hosted, proxy, cached, and grouped package repositories across common ecosystems. | Primary internal package source if Bayview prefers Sonatype workflows or has Maven-heavy practices. | SCA, source code review, developer endpoint controls, or incident response. |
+| Sonatype Nexus Repository or equivalent | Enterprise repository manager for hosted, proxy, cached, and grouped package repositories across common ecosystems. | Primary internal package source if Bayview prefers Sonatype workflows or has Maven-heavy practices. The reason to include it is to give developers a controlled package resolution path that can be logged, governed, and blocked from direct public registry access. | SCA, source code review, developer endpoint controls, or incident response. |
 | Cloud-native package registries | Internal package hosting tied to a cloud or DevOps platform. | Specific ecosystems or teams where the cloud-native registry is already the standard and can meet Bayview policy. | A universal enterprise repository strategy across all ecosystems. |
+| Sonatype Repository Firewall or equivalent | Repository firewall and package admission-control layer that can evaluate packages before or as they enter the internal repository path. | Useful where Bayview wants to quarantine or block malware, suspicious components, dependency confusion risk, or policy-violating packages before developers can install them from internal repositories. | The repository manager itself, endpoint egress blocking, or developer package manager configuration. |
+| Dependency cooldowns or equivalent | Delay newly published package versions before they are available through internal repositories. | Useful for npm, PyPI, and other fast-moving ecosystems where malicious releases may be discovered shortly after publication. Cooldowns reduce the chance that Bayview developers become early victims of a compromised version. | Package source control, SCA, package review, or incident response. |
 | Seal Security or equivalent | Curated or patched open source package source that may feed internal repositories. | Packages with difficult remediation paths or where cleanroom/backported packages reduce risk. | Repository management, network blocking, or package manager configuration. |
 | Chainguard Images or equivalent | Hardened image source that may feed an approved internal image repository. | Container base images where Bayview wants controlled, minimal, hardened upstream images. | General developer package repository management. |
 | Socket.dev or equivalent | Package-risk firewall or policy layer before packages reach developers or internal caches. | Higher-risk ecosystems where malicious packages, typosquats, risky install scripts, or suspicious maintainers are a concern. | The internal repository manager itself. |
@@ -144,7 +176,8 @@ Bayview should select one primary enterprise repository manager unless there is 
 - Select the primary enterprise repository manager or repository pattern, such as Artifactory, Nexus, cloud-native registries, or an approved combination.
 - Define hosted, proxy, mirror, and grouped repository patterns for priority ecosystems.
 - Decide whether cleanroom or hardened sources such as Seal Security or Chainguard should feed internal repositories for selected use cases.
-- Decide whether a package-risk firewall such as Socket.dev should sit upstream of the repository manager, in developer workflows, or both.
+- Decide whether Sonatype Repository Firewall, Socket.dev, or an equivalent package-risk firewall should sit upstream of the repository manager, in developer workflows, or both.
+- Define dependency cooldown requirements, including which ecosystems need a cooldown, how long new package versions should be delayed, and how emergency exceptions are approved.
 - Define authentication, authorization, audit logging, retention, backup, disaster recovery, and platform ownership requirements.
 - Define the minimum package request workflow for packages not yet available internally.
 
@@ -152,6 +185,7 @@ Bayview should select one primary enterprise repository manager unless there is 
 
 - Repository platform decision is documented.
 - Priority ecosystems have an approved internal repository pattern.
+- Repository firewall and dependency cooldown decisions are documented.
 - Platform owner, support model, and exception owner are identified.
 
 ### Phase 2: Configure and Migrate Developer Workflows
@@ -216,7 +250,7 @@ Bayview should select one primary enterprise repository manager unless there is 
 - Review internal repository logs, block logs, exception lists, and package request volume.
 - Expand internal repository requirements to remaining developer groups and ecosystems.
 - Tune package availability, caching, authentication, and documentation based on developer feedback.
-- Periodically review whether Seal Security, Chainguard, Socket.dev, or equivalent services should be added for specific upstream risk reduction.
+- Periodically review whether Sonatype Repository Firewall, dependency cooldown tooling, Seal Security, Chainguard, Socket.dev, or equivalent services should be added or tuned for specific upstream risk reduction.
 - Update the Secure Software Standard to require developers to use only approved internally managed package repositories.
 - Report progress to engineering and security leadership.
 
@@ -239,6 +273,8 @@ Developers must configure package managers and development environments to resol
 - Number of ecosystems migrated to internal repositories.
 - Number of missing package requests opened, approved, denied, and aged.
 - Number of package source exceptions by owner, age, and expiration date.
+- Number of packages blocked, quarantined, or warned by repository firewall policy.
+- Number of newly published package versions delayed by dependency cooldowns.
 - Mean time to fulfill approved package availability requests.
 - Number of developer teams migrated to internal repository use.
 
@@ -247,6 +283,8 @@ Developers must configure package managers and development environments to resol
 - Which repository manager or repository pattern should be the primary enterprise standard?
 - Which ecosystems should migrate first?
 - Which public package repositories and package manager endpoints should be blocked first?
+- Which repository firewall or equivalent package-risk policy layer should Bayview use?
+- Which ecosystems should receive dependency cooldowns, and what cooldown window should apply?
 - Which team owns repository administration and developer support?
 - Which team owns network, DNS, endpoint, or proxy enforcement?
 - Where will package source exceptions be recorded and reviewed?
@@ -262,3 +300,5 @@ Developers must configure package managers and development environments to resol
 - [Socket.dev Firewall](https://docs.socket.dev/docs/socket-firewall-overview)
 - [JFrog Artifactory](https://docs.jfrog.com/artifactory/docs/jfrog-artifactory)
 - [Sonatype Nexus Repository](https://help.sonatype.com/en/sonatype-nexus-repository.html)
+- [Sonatype Repository Firewall](https://help.sonatype.com/en/repository-firewall.html)
+- [Dependency Cooldowns](https://cooldowns.dev/)
