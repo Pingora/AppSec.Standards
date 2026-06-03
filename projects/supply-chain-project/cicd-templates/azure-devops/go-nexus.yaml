@@ -1,0 +1,67 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_GO_REPOSITORY: repository/go-group
+  GONOSUMDB: ""
+  # Set NEXUS_USERNAME and NEXUS_PASSWORD as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: GoTool@0
+    displayName: Set up Go
+    inputs:
+      version: "1.22.0"
+
+  - script: |
+      set -euo pipefail
+
+      nexus_go_proxy="${NEXUS_URL%/}/${NEXUS_GO_REPOSITORY%/}/"
+      go env -w GOPROXY="$nexus_go_proxy"
+
+      if [ -n "${GONOSUMDB:-}" ]; then
+        go env -w GONOSUMDB="$GONOSUMDB"
+      fi
+
+      python - <<'PY'
+      import os
+      import pathlib
+      import stat
+      from urllib.parse import urlparse
+
+      username = os.environ.get("NEXUS_USERNAME")
+      password = os.environ.get("NEXUS_PASSWORD")
+      host = urlparse(os.environ["NEXUS_URL"]).hostname
+
+      if username and password and host:
+          netrc = pathlib.Path.home() / ".netrc"
+          netrc.write_text(f"machine {host}\nlogin {username}\npassword {password}\n", encoding="utf-8")
+          netrc.chmod(stat.S_IRUSR | stat.S_IWUSR)
+      PY
+    displayName: Configure Go for Nexus
+    env:
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - script: |
+      set -euo pipefail
+
+      if [ -f "go.mod" ]; then
+        go mod download
+      fi
+
+      go test ./...
+      go build ./...
+    displayName: Build and test

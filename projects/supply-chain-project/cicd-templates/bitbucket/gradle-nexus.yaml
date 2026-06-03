@@ -1,0 +1,76 @@
+image: gradle:8-jdk17
+
+definitions:
+  caches:
+    gradle: ~/.gradle/caches
+
+pipelines:
+  default:
+    - step:
+        name: Gradle build with Nexus
+        caches:
+          - gradle
+        script:
+          - |
+            set -eu
+
+            NEXUS_URL="${NEXUS_URL:-https://nexus.example.com}"
+            NEXUS_MAVEN_REPOSITORY="${NEXUS_MAVEN_REPOSITORY:-repository/maven-public}"
+            export NEXUS_USERNAME="${NEXUS_USERNAME:-}"
+            export NEXUS_PASSWORD="${NEXUS_PASSWORD:-}"
+            export NEXUS_MAVEN_URL="${NEXUS_URL%/}/${NEXUS_MAVEN_REPOSITORY}"
+            GRADLE_INIT_SCRIPT="/tmp/nexus.init.gradle"
+
+            cat > "$GRADLE_INIT_SCRIPT" <<'EOF'
+            def nexusUrl = System.getenv("NEXUS_MAVEN_URL")
+            def nexusUser = System.getenv("NEXUS_USERNAME")
+            def nexusPassword = System.getenv("NEXUS_PASSWORD") ?: ""
+
+            def configureNexus = { repositories ->
+                repositories.clear()
+                repositories.maven {
+                    name = "nexus"
+                    url = uri(nexusUrl)
+                    if (nexusUser) {
+                        credentials {
+                            username = nexusUser
+                            password = nexusPassword
+                        }
+                    }
+                }
+            }
+
+            def settingsRepositoriesConfigured = false
+            def configureSettings = { settings ->
+                configureNexus(settings.pluginManagement.repositories)
+                if (settings.hasProperty("dependencyResolutionManagement")) {
+                    configureNexus(settings.dependencyResolutionManagement.repositories)
+                    settingsRepositoriesConfigured = true
+                }
+            }
+
+            beforeSettings { settings ->
+                configureSettings(settings)
+            }
+
+            settingsEvaluated { settings ->
+                configureSettings(settings)
+            }
+
+            allprojects {
+                configureNexus(buildscript.repositories)
+                if (!settingsRepositoriesConfigured) {
+                    configureNexus(repositories)
+                }
+            }
+            EOF
+
+            if [ -f "gradlew" ]; then
+              chmod +x gradlew
+              ./gradlew --init-script "$GRADLE_INIT_SCRIPT" build
+            elif [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+              gradle --init-script "$GRADLE_INIT_SCRIPT" build
+            else
+              echo "No Gradle build file found."
+              exit 1
+            fi

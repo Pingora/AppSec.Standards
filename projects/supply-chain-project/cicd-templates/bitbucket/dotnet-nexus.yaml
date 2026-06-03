@@ -1,0 +1,44 @@
+image: mcr.microsoft.com/dotnet/sdk:8.0
+
+definitions:
+  caches:
+    nuget: ~/.nuget/packages
+
+pipelines:
+  default:
+    - step:
+        name: .NET build with Nexus
+        caches:
+          - nuget
+        script:
+          - |
+            set -eu
+
+            NEXUS_URL="${NEXUS_URL:-https://nexus.example.com}"
+            NEXUS_NUGET_REPOSITORY="${NEXUS_NUGET_REPOSITORY:-repository/nuget-group/index.json}"
+            nexus_nuget_url="${NEXUS_URL%/}/${NEXUS_NUGET_REPOSITORY}"
+
+            dotnet nuget remove source nuget.org || true
+            dotnet nuget remove source nexus || true
+
+            if [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+              dotnet nuget add source "$nexus_nuget_url" \
+                --name nexus \
+                --username "$NEXUS_USERNAME" \
+                --password "$NEXUS_PASSWORD" \
+                --store-password-in-clear-text
+            else
+              dotnet nuget add source "$nexus_nuget_url" --name nexus
+            fi
+
+            solution="$(find . -maxdepth 2 -name '*.sln' | head -n 1)"
+
+            if [ -n "$solution" ]; then
+              dotnet restore "$solution"
+              dotnet build "$solution" --no-restore
+              dotnet test "$solution" --no-build --verbosity normal
+            else
+              dotnet restore
+              dotnet build --no-restore
+              dotnet test --no-build --verbosity normal
+            fi

@@ -1,0 +1,75 @@
+name: Maven build with Nexus
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_MAVEN_REPOSITORY: ${{ vars.NEXUS_MAVEN_REPOSITORY || 'repository/maven-public' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Maven for Nexus
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          nexus_maven_url="${NEXUS_URL%/}/${NEXUS_MAVEN_REPOSITORY}"
+          mkdir -p "$HOME/.m2"
+
+          cat > "$HOME/.m2/settings.xml" <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>\${env.NEXUS_USERNAME}</username>
+                <password>\${env.NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+            <mirrors>
+              <mirror>
+                <id>nexus</id>
+                <name>Nexus Maven group</name>
+                <url>${nexus_maven_url}</url>
+                <mirrorOf>*</mirrorOf>
+              </mirror>
+            </mirrors>
+          </settings>
+          EOF
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "mvnw" ]; then
+            chmod +x mvnw
+            ./mvnw -B verify
+          elif [ -f "pom.xml" ]; then
+            mvn -B verify
+          else
+            echo "No Maven build file found."
+            exit 1
+          fi

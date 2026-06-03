@@ -1,0 +1,82 @@
+name: Node.js build with Nexus
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_NPM_REPOSITORY: ${{ vars.NEXUS_NPM_REPOSITORY || 'repository/npm-group' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+  NEXUS_NPM_TOKEN: ${{ secrets.NEXUS_NPM_TOKEN }}
+
+jobs:
+  build:
+    name: Install, build, and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure npm for Nexus
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          registry="${NEXUS_URL%/}/${NEXUS_NPM_REPOSITORY%/}/"
+          registry_without_scheme="${registry#http://}"
+          registry_without_scheme="${registry_without_scheme#https://}"
+
+          npm config set registry "$registry"
+          npm config set always-auth true
+
+          if [ -n "${NEXUS_NPM_TOKEN:-}" ]; then
+            npm config set "//$registry_without_scheme:_authToken" "$NEXUS_NPM_TOKEN"
+          elif [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+            auth_value="$(printf "%s:%s" "$NEXUS_USERNAME" "$NEXUS_PASSWORD" | base64 | tr -d '\n')"
+            npm config set "//$registry_without_scheme:_auth" "$auth_value"
+            npm config set "//$registry_without_scheme:email" "ci@example.invalid"
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          corepack enable
+
+          if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+            npm ci
+          elif [ -f "pnpm-lock.yaml" ]; then
+            pnpm install --frozen-lockfile
+          elif [ -f "yarn.lock" ]; then
+            yarn_version="$(yarn --version)"
+            if [[ "$yarn_version" == 1.* ]]; then
+              yarn install --frozen-lockfile
+            else
+              yarn install --immutable
+            fi
+          else
+            npm install
+          fi
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npm run build --if-present
+          npm test --if-present

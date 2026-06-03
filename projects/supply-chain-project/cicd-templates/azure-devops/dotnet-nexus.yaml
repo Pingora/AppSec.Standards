@@ -1,0 +1,64 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_NUGET_REPOSITORY: repository/nuget-group/index.json
+  # Set NEXUS_USERNAME and NEXUS_PASSWORD as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: UseDotNet@2
+    displayName: Set up .NET
+    inputs:
+      packageType: sdk
+      version: "8.0.x"
+
+  - script: |
+      set -euo pipefail
+
+      nexus_nuget_url="${NEXUS_URL%/}/${NEXUS_NUGET_REPOSITORY}"
+
+      dotnet nuget remove source nuget.org || true
+      dotnet nuget remove source nexus || true
+
+      if [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+        dotnet nuget add source "$nexus_nuget_url" \
+          --name nexus \
+          --username "$NEXUS_USERNAME" \
+          --password "$NEXUS_PASSWORD" \
+          --store-password-in-clear-text
+      else
+        dotnet nuget add source "$nexus_nuget_url" --name nexus
+      fi
+    displayName: Configure NuGet for Nexus
+    env:
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - script: |
+      set -euo pipefail
+
+      solution="$(find . -maxdepth 2 -name '*.sln' | head -n 1)"
+
+      if [ -n "$solution" ]; then
+        dotnet restore "$solution"
+        dotnet build "$solution" --no-restore
+        dotnet test "$solution" --no-build --verbosity normal
+      else
+        dotnet restore
+        dotnet build --no-restore
+        dotnet test --no-build --verbosity normal
+      fi
+    displayName: Restore, build, and test

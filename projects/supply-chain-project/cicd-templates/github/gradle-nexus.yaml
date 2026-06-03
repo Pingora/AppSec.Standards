@@ -1,0 +1,102 @@
+name: Gradle build with Nexus
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_MAVEN_REPOSITORY: ${{ vars.NEXUS_MAVEN_REPOSITORY || 'repository/maven-public' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Gradle for Nexus
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          nexus_maven_url="${NEXUS_URL%/}/${NEXUS_MAVEN_REPOSITORY}"
+          gradle_init_script="$RUNNER_TEMP/nexus.init.gradle"
+
+          cat > "$gradle_init_script" <<'EOF'
+          def nexusUrl = System.getenv("NEXUS_MAVEN_URL")
+          def nexusUser = System.getenv("NEXUS_USERNAME")
+          def nexusPassword = System.getenv("NEXUS_PASSWORD") ?: ""
+
+          def configureNexus = { repositories ->
+              repositories.clear()
+              repositories.maven {
+                  name = "nexus"
+                  url = uri(nexusUrl)
+                  if (nexusUser) {
+                      credentials {
+                          username = nexusUser
+                          password = nexusPassword
+                      }
+                  }
+              }
+          }
+
+          def settingsRepositoriesConfigured = false
+          def configureSettings = { settings ->
+              configureNexus(settings.pluginManagement.repositories)
+              if (settings.hasProperty("dependencyResolutionManagement")) {
+                  configureNexus(settings.dependencyResolutionManagement.repositories)
+                  settingsRepositoriesConfigured = true
+              }
+          }
+
+          beforeSettings { settings ->
+              configureSettings(settings)
+          }
+
+          settingsEvaluated { settings ->
+              configureSettings(settings)
+          }
+
+          allprojects {
+              configureNexus(buildscript.repositories)
+              if (!settingsRepositoriesConfigured) {
+                  configureNexus(repositories)
+              }
+          }
+          EOF
+
+          echo "NEXUS_MAVEN_URL=$nexus_maven_url" >> "$GITHUB_ENV"
+          echo "GRADLE_INIT_SCRIPT=$gradle_init_script" >> "$GITHUB_ENV"
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew --init-script "$GRADLE_INIT_SCRIPT" build
+          elif [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            gradle --init-script "$GRADLE_INIT_SCRIPT" build
+          else
+            echo "No Gradle build file found."
+            exit 1
+          fi

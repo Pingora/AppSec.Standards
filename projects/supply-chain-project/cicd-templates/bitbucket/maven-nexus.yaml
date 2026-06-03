@@ -1,0 +1,49 @@
+image: maven:3.9-eclipse-temurin-17
+
+pipelines:
+  default:
+    - step:
+        name: Maven build with Nexus
+        caches:
+          - maven
+        script:
+          - |
+            set -eu
+
+            NEXUS_URL="${NEXUS_URL:-https://nexus.example.com}"
+            NEXUS_MAVEN_REPOSITORY="${NEXUS_MAVEN_REPOSITORY:-repository/maven-public}"
+            export NEXUS_USERNAME="${NEXUS_USERNAME:-}"
+            export NEXUS_PASSWORD="${NEXUS_PASSWORD:-}"
+            nexus_maven_url="${NEXUS_URL%/}/${NEXUS_MAVEN_REPOSITORY}"
+
+            mkdir -p "$HOME/.m2"
+
+            cat > "$HOME/.m2/settings.xml" <<EOF
+            <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+              <servers>
+                <server>
+                  <id>nexus</id>
+                  <username>\${env.NEXUS_USERNAME}</username>
+                  <password>\${env.NEXUS_PASSWORD}</password>
+                </server>
+              </servers>
+              <mirrors>
+                <mirror>
+                  <id>nexus</id>
+                  <name>Nexus Maven group</name>
+                  <url>${nexus_maven_url}</url>
+                  <mirrorOf>*</mirrorOf>
+                </mirror>
+              </mirrors>
+            </settings>
+            EOF
+
+            if [ -f "mvnw" ]; then
+              chmod +x mvnw
+              ./mvnw -B verify
+            elif [ -f "pom.xml" ]; then
+              mvn -B verify
+            else
+              echo "No Maven build file found."
+              exit 1
+            fi

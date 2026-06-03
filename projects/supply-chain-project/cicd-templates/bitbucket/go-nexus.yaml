@@ -1,0 +1,44 @@
+image: golang:1.22
+
+definitions:
+  caches:
+    gomod: /go/pkg/mod
+
+pipelines:
+  default:
+    - step:
+        name: Go build with Nexus
+        caches:
+          - gomod
+        script:
+          - |
+            set -eu
+
+            NEXUS_URL="${NEXUS_URL:-https://nexus.example.com}"
+            NEXUS_GO_REPOSITORY="${NEXUS_GO_REPOSITORY:-repository/go-group}"
+            nexus_go_proxy="${NEXUS_URL%/}/${NEXUS_GO_REPOSITORY%/}/"
+
+            go env -w GOPROXY="$nexus_go_proxy"
+
+            if [ -n "${GONOSUMDB:-}" ]; then
+              go env -w GONOSUMDB="$GONOSUMDB"
+            fi
+
+            if [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+              nexus_host="${NEXUS_URL#http://}"
+              nexus_host="${nexus_host#https://}"
+              nexus_host="${nexus_host%%/*}"
+              cat > "$HOME/.netrc" <<EOF
+            machine ${nexus_host}
+            login ${NEXUS_USERNAME}
+            password ${NEXUS_PASSWORD}
+            EOF
+              chmod 600 "$HOME/.netrc"
+            fi
+
+            if [ -f "go.mod" ]; then
+              go mod download
+            fi
+
+            go test ./...
+            go build ./...

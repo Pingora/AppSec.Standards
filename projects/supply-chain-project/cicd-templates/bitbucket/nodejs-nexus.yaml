@@ -1,0 +1,47 @@
+image: node:20
+
+pipelines:
+  default:
+    - step:
+        name: Node.js build with Nexus
+        caches:
+          - node
+        script:
+          - |
+            set -eu
+
+            NEXUS_URL="${NEXUS_URL:-https://nexus.example.com}"
+            NEXUS_NPM_REPOSITORY="${NEXUS_NPM_REPOSITORY:-repository/npm-group}"
+            registry="${NEXUS_URL%/}/${NEXUS_NPM_REPOSITORY%/}/"
+            registry_without_scheme="${registry#http://}"
+            registry_without_scheme="${registry_without_scheme#https://}"
+
+            npm config set registry "$registry"
+            npm config set always-auth true
+
+            if [ -n "${NEXUS_NPM_TOKEN:-}" ]; then
+              npm config set "//$registry_without_scheme:_authToken" "$NEXUS_NPM_TOKEN"
+            elif [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+              auth_value="$(printf "%s:%s" "$NEXUS_USERNAME" "$NEXUS_PASSWORD" | base64 | tr -d '\n')"
+              npm config set "//$registry_without_scheme:_auth" "$auth_value"
+              npm config set "//$registry_without_scheme:email" "ci@example.invalid"
+            fi
+
+            corepack enable
+
+            if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+              npm ci
+            elif [ -f "pnpm-lock.yaml" ]; then
+              pnpm install --frozen-lockfile
+            elif [ -f "yarn.lock" ]; then
+              yarn_version="$(yarn --version)"
+              case "$yarn_version" in
+                1.*) yarn install --frozen-lockfile ;;
+                *) yarn install --immutable ;;
+              esac
+            else
+              npm install
+            fi
+
+            npm run build --if-present
+            npm test --if-present

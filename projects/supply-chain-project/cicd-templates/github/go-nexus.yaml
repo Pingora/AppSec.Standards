@@ -1,0 +1,73 @@
+name: Go build with Nexus
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_GO_REPOSITORY: ${{ vars.NEXUS_GO_REPOSITORY || 'repository/go-group' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+  GONOSUMDB: ${{ vars.GONOSUMDB || '' }}
+
+jobs:
+  build:
+    name: Download modules, build, and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Configure Go for Nexus
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          nexus_go_proxy="${NEXUS_URL%/}/${NEXUS_GO_REPOSITORY%/}/"
+          go env -w GOPROXY="$nexus_go_proxy"
+
+          if [ -n "${GONOSUMDB:-}" ]; then
+            go env -w GONOSUMDB="$GONOSUMDB"
+          fi
+
+          python - <<'PY'
+          import os
+          import pathlib
+          import stat
+          from urllib.parse import urlparse
+
+          username = os.environ.get("NEXUS_USERNAME")
+          password = os.environ.get("NEXUS_PASSWORD")
+          host = urlparse(os.environ["NEXUS_URL"]).hostname
+
+          if username and password and host:
+              netrc = pathlib.Path.home() / ".netrc"
+              netrc.write_text(f"machine {host}\nlogin {username}\npassword {password}\n", encoding="utf-8")
+              netrc.chmod(stat.S_IRUSR | stat.S_IWUSR)
+          PY
+
+      - name: Build and test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f "go.mod" ]; then
+            go mod download
+          fi
+
+          go test ./...
+          go build ./...

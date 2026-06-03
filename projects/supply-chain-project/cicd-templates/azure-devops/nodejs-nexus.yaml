@@ -1,0 +1,76 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_NPM_REPOSITORY: repository/npm-group
+  # Set NEXUS_NPM_TOKEN, or NEXUS_USERNAME and NEXUS_PASSWORD, as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: NodeTool@0
+    displayName: Set up Node.js
+    inputs:
+      versionSpec: "20.x"
+
+  - script: |
+      set -euo pipefail
+
+      registry="${NEXUS_URL%/}/${NEXUS_NPM_REPOSITORY%/}/"
+      registry_without_scheme="${registry#http://}"
+      registry_without_scheme="${registry_without_scheme#https://}"
+
+      npm config set registry "$registry"
+      npm config set always-auth true
+
+      if [ -n "${NEXUS_NPM_TOKEN:-}" ]; then
+        npm config set "//$registry_without_scheme:_authToken" "$NEXUS_NPM_TOKEN"
+      elif [ -n "${NEXUS_USERNAME:-}" ] && [ -n "${NEXUS_PASSWORD:-}" ]; then
+        auth_value="$(printf "%s:%s" "$NEXUS_USERNAME" "$NEXUS_PASSWORD" | base64 | tr -d '\n')"
+        npm config set "//$registry_without_scheme:_auth" "$auth_value"
+        npm config set "//$registry_without_scheme:email" "ci@example.invalid"
+      fi
+    displayName: Configure npm for Nexus
+    env:
+      NEXUS_NPM_TOKEN: $(NEXUS_NPM_TOKEN)
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - script: |
+      set -euo pipefail
+
+      corepack enable
+
+      if [ -f "package-lock.json" ] || [ -f "npm-shrinkwrap.json" ]; then
+        npm ci
+      elif [ -f "pnpm-lock.yaml" ]; then
+        pnpm install --frozen-lockfile
+      elif [ -f "yarn.lock" ]; then
+        yarn_version="$(yarn --version)"
+        if [[ "$yarn_version" == 1.* ]]; then
+          yarn install --frozen-lockfile
+        else
+          yarn install --immutable
+        fi
+      else
+        npm install
+      fi
+    displayName: Install dependencies
+
+  - script: |
+      set -euo pipefail
+
+      npm run build --if-present
+      npm test --if-present
+    displayName: Build and test
