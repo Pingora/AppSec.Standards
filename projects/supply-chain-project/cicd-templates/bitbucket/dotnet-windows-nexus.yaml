@@ -1,0 +1,36 @@
+pipelines:
+  default:
+    - step:
+        name: .NET build with Nexus on Windows
+        runs-on:
+          - self.hosted
+          - windows
+        script:
+          - |
+            $ErrorActionPreference = "Stop"
+
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_URL)) { $env:NEXUS_URL = "https://nexus.example.com" }
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_NUGET_REPOSITORY)) { $env:NEXUS_NUGET_REPOSITORY = "repository/nuget-group/index.json" }
+
+            $nexusNuGetUrl = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_NUGET_REPOSITORY.Trim('/'))"
+
+            dotnet nuget remove source nuget.org 2>$null
+            dotnet nuget remove source nexus 2>$null
+
+            if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+              dotnet nuget add source $nexusNuGetUrl --name nexus --username $env:NEXUS_USERNAME --password $env:NEXUS_PASSWORD --store-password-in-clear-text
+            } else {
+              dotnet nuget add source $nexusNuGetUrl --name nexus
+            }
+
+            $solution = Get-ChildItem -Path . -Filter "*.sln" -Recurse -Depth 2 | Select-Object -First 1
+
+            if ($solution) {
+              dotnet restore $solution.FullName
+              dotnet build $solution.FullName --no-restore
+              dotnet test $solution.FullName --no-build --verbosity normal
+            } else {
+              dotnet restore
+              dotnet build --no-restore
+              dotnet test --no-build --verbosity normal
+            }

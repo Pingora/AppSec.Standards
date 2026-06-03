@@ -1,0 +1,34 @@
+pipelines:
+  default:
+    - step:
+        name: Go build with Nexus on Windows
+        runs-on:
+          - self.hosted
+          - windows
+        script:
+          - |
+            $ErrorActionPreference = "Stop"
+
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_URL)) { $env:NEXUS_URL = "https://nexus.example.com" }
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_GO_REPOSITORY)) { $env:NEXUS_GO_REPOSITORY = "repository/go-group" }
+
+            $nexusGoProxy = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_GO_REPOSITORY.Trim('/'))/"
+            go env -w GOPROXY="$nexusGoProxy"
+
+            if (-not [string]::IsNullOrWhiteSpace($env:GONOSUMDB)) {
+              go env -w GONOSUMDB="$env:GONOSUMDB"
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+              $hostName = ([Uri]$env:NEXUS_URL).Host
+              $netrc = "machine $hostName`nlogin $env:NEXUS_USERNAME`npassword $env:NEXUS_PASSWORD`n"
+              Set-Content -Path (Join-Path $env:USERPROFILE "_netrc") -Value $netrc -NoNewline -Encoding ASCII
+              Set-Content -Path (Join-Path $env:USERPROFILE ".netrc") -Value $netrc -NoNewline -Encoding ASCII
+            }
+
+            if (Test-Path "go.mod") {
+              go mod download
+            }
+
+            go test ./...
+            go build ./...

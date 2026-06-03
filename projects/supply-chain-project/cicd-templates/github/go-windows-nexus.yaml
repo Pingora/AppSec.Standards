@@ -1,0 +1,64 @@
+name: Go build with Nexus on Windows
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_GO_REPOSITORY: ${{ vars.NEXUS_GO_REPOSITORY || 'repository/go-group' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+  GONOSUMDB: ${{ vars.GONOSUMDB || '' }}
+
+jobs:
+  build:
+    name: Download modules, build, and test
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Configure Go for Nexus
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $nexusGoProxy = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_GO_REPOSITORY.Trim('/'))/"
+          go env -w GOPROXY="$nexusGoProxy"
+
+          if (-not [string]::IsNullOrWhiteSpace($env:GONOSUMDB)) {
+            go env -w GONOSUMDB="$env:GONOSUMDB"
+          }
+
+          if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+            $hostName = ([Uri]$env:NEXUS_URL).Host
+            $netrc = "machine $hostName`nlogin $env:NEXUS_USERNAME`npassword $env:NEXUS_PASSWORD`n"
+            Set-Content -Path (Join-Path $env:USERPROFILE "_netrc") -Value $netrc -NoNewline -Encoding ASCII
+            Set-Content -Path (Join-Path $env:USERPROFILE ".netrc") -Value $netrc -NoNewline -Encoding ASCII
+          }
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (Test-Path "go.mod") {
+            go mod download
+          }
+
+          go test ./...
+          go build ./...

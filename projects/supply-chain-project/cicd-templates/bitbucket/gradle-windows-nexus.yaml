@@ -1,0 +1,74 @@
+pipelines:
+  default:
+    - step:
+        name: Gradle build with Nexus on Windows
+        runs-on:
+          - self.hosted
+          - windows
+        script:
+          - |
+            $ErrorActionPreference = "Stop"
+
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_URL)) { $env:NEXUS_URL = "https://nexus.example.com" }
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_MAVEN_REPOSITORY)) { $env:NEXUS_MAVEN_REPOSITORY = "repository/maven-public" }
+            if ($null -eq $env:NEXUS_USERNAME) { $env:NEXUS_USERNAME = "" }
+            if ($null -eq $env:NEXUS_PASSWORD) { $env:NEXUS_PASSWORD = "" }
+
+            $env:NEXUS_MAVEN_URL = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_MAVEN_REPOSITORY.Trim('/'))"
+            $gradleInitScript = Join-Path $env:TEMP "nexus.init.gradle"
+
+            $initScript = @'
+            def nexusUrl = System.getenv("NEXUS_MAVEN_URL")
+            def nexusUser = System.getenv("NEXUS_USERNAME")
+            def nexusPassword = System.getenv("NEXUS_PASSWORD") ?: ""
+
+            def configureNexus = { repositories ->
+                repositories.clear()
+                repositories.maven {
+                    name = "nexus"
+                    url = uri(nexusUrl)
+                    if (nexusUser) {
+                        credentials {
+                            username = nexusUser
+                            password = nexusPassword
+                        }
+                    }
+                }
+            }
+
+            def settingsRepositoriesConfigured = false
+            def configureSettings = { settings ->
+                configureNexus(settings.pluginManagement.repositories)
+                if (settings.hasProperty("dependencyResolutionManagement")) {
+                    configureNexus(settings.dependencyResolutionManagement.repositories)
+                    settingsRepositoriesConfigured = true
+                }
+            }
+
+            beforeSettings { settings ->
+                configureSettings(settings)
+            }
+
+            settingsEvaluated { settings ->
+                configureSettings(settings)
+            }
+
+            allprojects {
+                configureNexus(buildscript.repositories)
+                if (!settingsRepositoriesConfigured) {
+                    configureNexus(repositories)
+                }
+            }
+            '@
+
+            Set-Content -Path $gradleInitScript -Value $initScript -Encoding UTF8
+
+            if (Test-Path ".\gradlew.bat") {
+              .\gradlew.bat --init-script "$gradleInitScript" build
+            } elseif (Test-Path ".\gradlew") {
+              .\gradlew --init-script "$gradleInitScript" build
+            } elseif ((Test-Path "build.gradle") -or (Test-Path "build.gradle.kts")) {
+              gradle --init-script "$gradleInitScript" build
+            } else {
+              Write-Error "No Gradle build file found."
+            }

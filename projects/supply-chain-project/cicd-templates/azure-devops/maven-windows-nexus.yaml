@@ -1,0 +1,82 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_MAVEN_REPOSITORY: repository/maven-public
+  NEXUS_USERNAME: ""
+  NEXUS_PASSWORD: ""
+  # Set NEXUS_USERNAME and NEXUS_PASSWORD as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: JavaToolInstaller@0
+    displayName: Set up Java
+    inputs:
+      versionSpec: "17"
+      jdkArchitectureOption: x64
+      jdkSourceOption: PreInstalled
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      $nexusMavenUrl = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_MAVEN_REPOSITORY.Trim('/'))"
+      $m2Dir = Join-Path $env:USERPROFILE ".m2"
+      New-Item -ItemType Directory -Force -Path $m2Dir | Out-Null
+
+      $settings = @'
+      <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+        <servers>
+          <server>
+            <id>nexus</id>
+            <username>${env.NEXUS_USERNAME}</username>
+            <password>${env.NEXUS_PASSWORD}</password>
+          </server>
+        </servers>
+        <mirrors>
+          <mirror>
+            <id>nexus</id>
+            <name>Nexus Maven group</name>
+            <url>__NEXUS_MAVEN_URL__</url>
+            <mirrorOf>*</mirrorOf>
+          </mirror>
+        </mirrors>
+      </settings>
+      '@
+
+      $settings.Replace("__NEXUS_MAVEN_URL__", $nexusMavenUrl) |
+        Set-Content -Path (Join-Path $m2Dir "settings.xml") -Encoding UTF8
+    displayName: Configure Maven for Nexus
+    env:
+      NEXUS_URL: $(NEXUS_URL)
+      NEXUS_MAVEN_REPOSITORY: $(NEXUS_MAVEN_REPOSITORY)
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      if (Test-Path ".\mvnw.cmd") {
+        .\mvnw.cmd -B verify
+      } elseif (Test-Path ".\mvnw") {
+        .\mvnw -B verify
+      } elseif (Test-Path "pom.xml") {
+        mvn -B verify
+      } else {
+        Write-Error "No Maven build file found."
+      }
+    displayName: Build and test
+    env:
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)

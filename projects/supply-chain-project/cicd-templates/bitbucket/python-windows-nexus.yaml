@@ -1,0 +1,44 @@
+pipelines:
+  default:
+    - step:
+        name: Python build with Nexus on Windows
+        runs-on:
+          - self.hosted
+          - windows
+        script:
+          - |
+            $ErrorActionPreference = "Stop"
+
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_URL)) { $env:NEXUS_URL = "https://nexus.example.com" }
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_PYPI_REPOSITORY)) { $env:NEXUS_PYPI_REPOSITORY = "repository/pypi-group" }
+
+            $nexusPypiUrl = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_PYPI_REPOSITORY.Trim('/'))/simple"
+            python -m pip config set global.index-url $nexusPypiUrl
+
+            if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+              $hostName = ([Uri]$nexusPypiUrl).Host
+              $netrc = "machine $hostName`nlogin $env:NEXUS_USERNAME`npassword $env:NEXUS_PASSWORD`n"
+              Set-Content -Path (Join-Path $env:USERPROFILE "_netrc") -Value $netrc -NoNewline -Encoding ASCII
+              Set-Content -Path (Join-Path $env:USERPROFILE ".netrc") -Value $netrc -NoNewline -Encoding ASCII
+            }
+
+            python -m pip install --upgrade pip
+
+            if (Test-Path "requirements.txt") {
+              python -m pip install -r requirements.txt
+            }
+
+            if (Test-Path "requirements-dev.txt") {
+              python -m pip install -r requirements-dev.txt
+            }
+
+            if ((Test-Path "pyproject.toml") -or (Test-Path "setup.py")) {
+              python -m pip install .
+            }
+
+            python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"
+            if ($LASTEXITCODE -eq 0) {
+              python -m pytest
+            } else {
+              Write-Host "pytest is not installed; skipping tests."
+            }

@@ -1,0 +1,75 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_PYPI_REPOSITORY: repository/pypi-group
+  NEXUS_USERNAME: ""
+  NEXUS_PASSWORD: ""
+  # Set NEXUS_USERNAME and NEXUS_PASSWORD as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: UsePythonVersion@0
+    displayName: Set up Python
+    inputs:
+      versionSpec: "3.12"
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      $nexusPypiUrl = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_PYPI_REPOSITORY.Trim('/'))/simple"
+      python -m pip config set global.index-url $nexusPypiUrl
+
+      if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+        $hostName = ([Uri]$nexusPypiUrl).Host
+        $netrc = "machine $hostName`nlogin $env:NEXUS_USERNAME`npassword $env:NEXUS_PASSWORD`n"
+        Set-Content -Path (Join-Path $env:USERPROFILE "_netrc") -Value $netrc -NoNewline -Encoding ASCII
+        Set-Content -Path (Join-Path $env:USERPROFILE ".netrc") -Value $netrc -NoNewline -Encoding ASCII
+      }
+    displayName: Configure pip for Nexus
+    env:
+      NEXUS_URL: $(NEXUS_URL)
+      NEXUS_PYPI_REPOSITORY: $(NEXUS_PYPI_REPOSITORY)
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      python -m pip install --upgrade pip
+
+      if (Test-Path "requirements.txt") {
+        python -m pip install -r requirements.txt
+      }
+
+      if (Test-Path "requirements-dev.txt") {
+        python -m pip install -r requirements-dev.txt
+      }
+
+      if ((Test-Path "pyproject.toml") -or (Test-Path "setup.py")) {
+        python -m pip install .
+      }
+    displayName: Install dependencies
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"
+      if ($LASTEXITCODE -eq 0) {
+        python -m pytest
+      } else {
+        Write-Host "pytest is not installed; skipping tests."
+      }
+    displayName: Test

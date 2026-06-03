@@ -1,0 +1,79 @@
+name: Maven build with Nexus on Windows
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXUS_URL: ${{ vars.NEXUS_URL || 'https://nexus.example.com' }}
+  NEXUS_MAVEN_REPOSITORY: ${{ vars.NEXUS_MAVEN_REPOSITORY || 'repository/maven-public' }}
+  NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+  NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Maven for Nexus
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $nexusMavenUrl = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_MAVEN_REPOSITORY.Trim('/'))"
+          $m2Dir = Join-Path $env:USERPROFILE ".m2"
+          New-Item -ItemType Directory -Force -Path $m2Dir | Out-Null
+
+          $settings = @'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${env.NEXUS_USERNAME}</username>
+                <password>${env.NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+            <mirrors>
+              <mirror>
+                <id>nexus</id>
+                <name>Nexus Maven group</name>
+                <url>__NEXUS_MAVEN_URL__</url>
+                <mirrorOf>*</mirrorOf>
+              </mirror>
+            </mirrors>
+          </settings>
+          '@
+
+          $settings.Replace("__NEXUS_MAVEN_URL__", $nexusMavenUrl) |
+            Set-Content -Path (Join-Path $m2Dir "settings.xml") -Encoding UTF8
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (Test-Path ".\mvnw.cmd") {
+            .\mvnw.cmd -B verify
+          } elseif (Test-Path ".\mvnw") {
+            .\mvnw -B verify
+          } elseif (Test-Path "pom.xml") {
+            mvn -B verify
+          } else {
+            Write-Error "No Maven build file found."
+          }

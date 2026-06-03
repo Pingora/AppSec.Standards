@@ -1,0 +1,48 @@
+pipelines:
+  default:
+    - step:
+        name: Node.js build with Nexus on Windows
+        runs-on:
+          - self.hosted
+          - windows
+        script:
+          - |
+            $ErrorActionPreference = "Stop"
+
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_URL)) { $env:NEXUS_URL = "https://nexus.example.com" }
+            if ([string]::IsNullOrWhiteSpace($env:NEXUS_NPM_REPOSITORY)) { $env:NEXUS_NPM_REPOSITORY = "repository/npm-group" }
+
+            $registry = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_NPM_REPOSITORY.Trim('/'))/"
+            $registryWithoutScheme = $registry -replace '^https?://', ''
+
+            npm config set registry $registry
+            npm config set always-auth true
+
+            if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_NPM_TOKEN)) {
+              npm config set "//${registryWithoutScheme}:_authToken" $env:NEXUS_NPM_TOKEN
+            } elseif (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+              $authBytes = [Text.Encoding]::UTF8.GetBytes("$($env:NEXUS_USERNAME):$($env:NEXUS_PASSWORD)")
+              $authValue = [Convert]::ToBase64String($authBytes)
+              npm config set "//${registryWithoutScheme}:_auth" $authValue
+              npm config set "//${registryWithoutScheme}:email" "ci@example.invalid"
+            }
+
+            corepack enable
+
+            if ((Test-Path "package-lock.json") -or (Test-Path "npm-shrinkwrap.json")) {
+              npm ci
+            } elseif (Test-Path "pnpm-lock.yaml") {
+              pnpm install --frozen-lockfile
+            } elseif (Test-Path "yarn.lock") {
+              $yarnVersion = yarn --version
+              if ($yarnVersion.StartsWith("1.")) {
+                yarn install --frozen-lockfile
+              } else {
+                yarn install --immutable
+              }
+            } else {
+              npm install
+            }
+
+            npm run build --if-present
+            npm test --if-present

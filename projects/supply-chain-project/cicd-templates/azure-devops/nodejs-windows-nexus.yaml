@@ -1,0 +1,81 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  NEXUS_URL: https://nexus.example.com
+  NEXUS_NPM_REPOSITORY: repository/npm-group
+  NEXUS_NPM_TOKEN: ""
+  NEXUS_USERNAME: ""
+  NEXUS_PASSWORD: ""
+  # Set NEXUS_NPM_TOKEN, or NEXUS_USERNAME and NEXUS_PASSWORD, as secret pipeline variables when required.
+
+steps:
+  - checkout: self
+
+  - task: NodeTool@0
+    displayName: Set up Node.js
+    inputs:
+      versionSpec: "20.x"
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      $registry = "$($env:NEXUS_URL.TrimEnd('/'))/$($env:NEXUS_NPM_REPOSITORY.Trim('/'))/"
+      $registryWithoutScheme = $registry -replace '^https?://', ''
+
+      npm config set registry $registry
+      npm config set always-auth true
+
+      if (-not [string]::IsNullOrWhiteSpace($env:NEXUS_NPM_TOKEN)) {
+        npm config set "//${registryWithoutScheme}:_authToken" $env:NEXUS_NPM_TOKEN
+      } elseif (-not [string]::IsNullOrWhiteSpace($env:NEXUS_USERNAME) -and -not [string]::IsNullOrWhiteSpace($env:NEXUS_PASSWORD)) {
+        $authBytes = [Text.Encoding]::UTF8.GetBytes("$($env:NEXUS_USERNAME):$($env:NEXUS_PASSWORD)")
+        $authValue = [Convert]::ToBase64String($authBytes)
+        npm config set "//${registryWithoutScheme}:_auth" $authValue
+        npm config set "//${registryWithoutScheme}:email" "ci@example.invalid"
+      }
+    displayName: Configure npm for Nexus
+    env:
+      NEXUS_URL: $(NEXUS_URL)
+      NEXUS_NPM_REPOSITORY: $(NEXUS_NPM_REPOSITORY)
+      NEXUS_NPM_TOKEN: $(NEXUS_NPM_TOKEN)
+      NEXUS_USERNAME: $(NEXUS_USERNAME)
+      NEXUS_PASSWORD: $(NEXUS_PASSWORD)
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      corepack enable
+
+      if ((Test-Path "package-lock.json") -or (Test-Path "npm-shrinkwrap.json")) {
+        npm ci
+      } elseif (Test-Path "pnpm-lock.yaml") {
+        pnpm install --frozen-lockfile
+      } elseif (Test-Path "yarn.lock") {
+        $yarnVersion = yarn --version
+        if ($yarnVersion.StartsWith("1.")) {
+          yarn install --frozen-lockfile
+        } else {
+          yarn install --immutable
+        }
+      } else {
+        npm install
+      }
+    displayName: Install dependencies
+
+  - pwsh: |
+      $ErrorActionPreference = "Stop"
+
+      npm run build --if-present
+      npm test --if-present
+    displayName: Build and test
