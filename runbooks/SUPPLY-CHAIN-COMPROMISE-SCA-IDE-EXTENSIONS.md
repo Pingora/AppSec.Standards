@@ -1,20 +1,21 @@
-# NPM Malware and VSCode Malware Runbook
+# Supply Chain Compromise Runbook: SCA and IDE Extensions
 
-Last updated: 2026-06-03
+Last updated: 2026-06-04
 
 ## Purpose
 
-This runbook helps the SOC investigate and respond to suspected malicious npm packages, malicious VSCode/Open VSX extensions, and related developer-tool supply chain attacks.
+This runbook helps the SOC investigate and respond to suspected developer supply chain compromise, including malicious open source packages identified by software composition analysis (SCA), malicious package manager activity, malicious IDE extensions, and related developer-tool attacks.
 
-Use this runbook when an alert, threat advisory, developer report, package scan, EDR event, proxy log, or repository audit indicates that a developer workstation, CI/CD runner, build container, package cache, or code repository may have executed malicious package or extension code.
+Use this runbook when an alert, threat advisory, developer report, SCA finding, package scan, EDR event, proxy log, or repository audit indicates that a developer workstation, CI/CD runner, build container, package cache, IDE, or code repository may have executed malicious package or extension code.
 
 ## Scope
 
 In scope:
 
 - npm, pnpm, Yarn, and Node.js package install or update activity.
-- VSCode, Cursor, Windsurf, and other VSCode-compatible extension installs or auto-updates.
-- Open VSX and Visual Studio Marketplace extension compromise.
+- Software composition analysis findings for known malicious packages, transitive dependencies, or remote package sources.
+- VSCode, Cursor, Windsurf, and other IDE extension installs or auto-updates.
+- Open VSX, Visual Studio Marketplace, and other IDE extension marketplace compromise.
 - Developer endpoints, privileged admin workstations, build agents, CI/CD runners, artifact repositories, source repositories, and package publishing workflows.
 - Credentials accessible to the affected environment, including GitHub, Bitbucket, npm, cloud, SSH, Vault, Kubernetes, 1Password CLI sessions, environment variables, and CI/CD secrets.
 
@@ -27,7 +28,7 @@ Out of scope:
 
 Treat the incident as **Critical** if any of the following are true:
 
-- A known malicious package or malicious VSCode extension version was installed or auto-updated.
+- A known malicious package, transitive dependency, remote dependency, or IDE extension version was installed or auto-updated.
 - The host or CI runner contacted known command-and-control infrastructure.
 - Malware persistence artifacts are present.
 - npm package publish tokens, GitHub tokens, cloud credentials, SSH keys, Vault tokens, or CI/CD secrets were present on the affected system.
@@ -49,7 +50,7 @@ Treat as **High** if exposure is suspected but not confirmed. Downgrade only aft
 
 Start an incident if any trigger below is observed:
 
-- Alert for a known malicious package, malicious package version, or malicious VSCode extension.
+- Alert for a known malicious package, malicious package version, malicious transitive dependency, malicious remote dependency, or malicious IDE extension.
 - `npm`, `pnpm`, `yarn`, `node`, `bun`, `code`, `cursor`, or an extension host process spawns shell, PowerShell, Python, curl, wget, osascript, or another scripting utility.
 - Unexpected outbound network activity from a package install, build step, VSCode extension host, or CI runner.
 - Package manifests or lockfiles reference an HTTP URL dependency, unexpected package, or package version listed in this runbook.
@@ -63,16 +64,34 @@ Capture the following immediately:
 - Whether the affected system is a developer workstation, CI/CD runner, build container, production host, or package publishing environment.
 - All credentials that may have been accessible on disk, in environment variables, in secret stores, or through active CLI sessions.
 
+## Tactical Response Order
+
+Credential containment comes before eradication. Rebuilding or cleaning a host while a stolen token remains valid can leave the attacker with durable access outside the affected machine.
+
+Upon detection:
+
+1. Isolate the affected machine or runner from the network.
+2. Pause affected CI/CD jobs, runner pools, package publishing workflows, and automated deployment paths.
+3. Determine exactly which secrets the affected environment could access.
+4. Map the transitive secret exposure graph: for each exposed credential, identify the repositories, clouds, CI/CD systems, package registries, secret stores, databases, clusters, SaaS applications, and additional secrets it could read, mint, modify, or administer.
+5. Revoke or rotate all directly and transitively exposed secrets, prioritizing credentials that can access source control, cloud control planes, production data, secret stores, package publishing, CI/CD administration, or other secrets.
+6. Validate that old credentials, sessions, refresh tokens, deploy keys, webhooks, OAuth grants, and service principal credentials no longer work.
+7. Shift to eradication, rebuild, and controlled reintroduction of the affected machine or runner.
+
+Do not treat host cleanup as complete until the credential exposure graph is closed. Missing one token, cloud key, or secret-store credential can preserve compromise and allow later data theft, tampering, destructive activity, or ransom activity.
+
 ## First 30 Minutes
 
 1. Open an incident and assign an incident commander.
-2. Preserve evidence before cleanup where possible.
-3. Isolate affected developer endpoints from the network using EDR.
-4. Pause affected CI/CD jobs, runners, and package publishing workflows.
-5. Disable or revoke exposed npm, GitHub, Bitbucket, cloud, Vault, SSH, and CI/CD tokens.
-6. Block known malicious domains, IPs, and package artifacts at DNS, proxy, firewall, EDR, and artifact repository controls.
-7. Notify AppSec, Developer Platform, Endpoint, and IAM owners.
-8. Search for the same package, extension, or IoCs across all developer endpoints, repositories, build logs, and package caches.
+2. Isolate affected developer endpoints from the network using EDR.
+3. Pause affected CI/CD jobs, runners, and package publishing workflows.
+4. Preserve evidence where doing so does not delay isolation or credential containment.
+5. Build the credential exposure graph for the affected user, host, runner, repository, and pipeline.
+6. Disable, revoke, or rotate all directly and transitively exposed npm, GitHub, Bitbucket, GitLab, cloud, Vault, SSH, SaaS, and CI/CD credentials.
+7. Prioritize immediate rotation for credentials that can access source control, cloud control planes, production data, secret stores, package publishing, CI/CD administration, or other secrets.
+8. Block known malicious domains, IPs, and package artifacts at DNS, proxy, firewall, EDR, and artifact repository controls.
+9. Notify AppSec, Developer Platform, Endpoint, Cloud/IAM, and secret-store owners.
+10. Search for the same package, extension, or IoCs across all developer endpoints, repositories, build logs, and package caches.
 
 Do not run `npm install`, `pnpm install`, `yarn install`, or reopen the affected workspace on a suspected host until evidence has been collected. Re-running install scripts can re-execute malware.
 
@@ -131,8 +150,18 @@ For each affected package or extension, determine:
 - Was the installation performed on a workstation, CI runner, container build, or production-like system?
 - Which user account ran the install?
 - Which credentials were accessible to that user and host?
+- Which additional systems, secrets, roles, tokens, keys, repositories, packages, and cloud resources those credentials could access or administer?
 - Did the host contact known malicious infrastructure?
 - Did the host create or modify repositories, workflows, package versions, cloud resources, or secret stores afterward?
+
+Build a credential exposure graph that includes:
+
+- Local secrets on disk, in shell history, in editor configuration, in package manager configuration, in environment variables, and in active CLI sessions.
+- Source control access: PATs, SSH keys, deploy keys, GitHub CLI sessions, OAuth grants, GitHub Apps, repository webhooks, Actions secrets, and workflow permissions.
+- Package registry access: npm tokens, publish automation, trusted publishing configuration, package maintainer sessions, and artifact repository credentials.
+- Cloud access: access keys, refresh tokens, service principals, managed identities, workload identity/OIDC trust paths, role assumptions, and metadata-service credentials.
+- Secret-store access: Vault, cloud secret managers, Kubernetes secrets, CI/CD secret stores, 1Password CLI sessions, and any credential that can read or mint more credentials.
+- Downstream blast radius: production systems, sensitive data stores, package publishing authority, infrastructure administration, and any path that could enable persistence or privilege expansion.
 
 ### Host Forensics
 
@@ -259,6 +288,8 @@ Review GitHub audit logs for:
 
 Preferred eradication is rebuild, not manual cleanup.
 
+Begin eradication after isolation is complete and directly or transitively exposed credentials are revoked or actively being rotated.
+
 - Reimage affected developer endpoints where malware execution is confirmed or likely.
 - Rebuild affected CI runners from clean base images.
 - Delete and recreate build containers and ephemeral environments.
@@ -281,6 +312,8 @@ Then reinstall only from a clean lockfile and approved package source. Do not re
 
 Assume any credential reachable from the affected environment is exposed.
 
+Rotate secrets by reachability, not just by where they were found. If an exposed token could read a secret store, assume the readable secrets are also exposed. If a cloud role could assume another role, read deployment outputs, access CI/CD variables, or retrieve database credentials, include those downstream secrets in scope.
+
 Rotate or revoke:
 
 - GitHub personal access tokens, GitHub CLI OAuth tokens, deploy keys, SSH keys, GitHub Apps, OAuth apps, and fine-grained tokens.
@@ -294,11 +327,12 @@ Rotate or revoke:
 
 Use this order when impact is broad:
 
-1. Disable active attacker access: repository, package publishing, cloud admin, and CI/CD admin tokens.
-2. Rotate production and high-privilege secrets.
-3. Rotate package publishing and developer platform credentials.
-4. Rotate lower-privilege developer tokens and SSH keys.
-5. Validate that old credentials no longer work.
+1. Disable active attacker access: repository, package publishing, cloud admin, secret-store admin, and CI/CD admin tokens.
+2. Rotate credentials that can read, mint, modify, or administer other secrets.
+3. Rotate production and high-privilege secrets.
+4. Rotate package publishing and developer platform credentials.
+5. Rotate lower-privilege developer tokens and SSH keys.
+6. Validate that old credentials, refresh tokens, sessions, deploy keys, webhooks, OAuth grants, and service principal credentials no longer work.
 
 ## Recovery
 
