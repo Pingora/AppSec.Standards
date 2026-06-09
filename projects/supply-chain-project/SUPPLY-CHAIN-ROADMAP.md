@@ -84,14 +84,14 @@ The initial SCA language inventory should drive which package managers and repos
 
 | SCA Language | Count | Package Managers and Sources Commonly Found With This Language |
 | --- | ---: | --- |
-| Unknown | 47584 | Investigate with source control, Wiz, CI/CD, endpoint, and container data. Unknown language findings may still include package resolution through Dockerfiles, shell installers, OS package managers, vendored dependencies, GitHub release downloads, or package manager config files that SCA did not classify cleanly. |
+| Unknown | 47584 | Anomaly. These are mostly DPKG/OS level packages, not actual lockfiles. |
 | PYTHON | 1795 | `pip`, `pip-tools`, `Poetry`, `Pipenv`, `PDM`, `uv`, `Conda`, and private Python package indexes. |
-| GO | 1625 | Go modules through `go`, `GOPROXY`, private module proxies, vendored modules, and direct VCS module resolution. |
+| GO | 1625 | Anomaly. These are all OS packages. We do not develop in Go. |
 | CSHARP | 1462 | `NuGet`, `dotnet restore`, Visual Studio package restore, private NuGet feeds, and Azure Artifacts feeds where applicable. |
 | JAVASCRIPT | 1245 | `npm`, `Yarn`, `pnpm`, private npm registries, and package manager lockfiles such as `package-lock.json`, `yarn.lock`, and `pnpm-lock.yaml`. |
 | JAVA | 1017 | `Maven`, `Gradle`, private Maven repositories, internal artifact repositories, and repository settings in `settings.xml`, `pom.xml`, and Gradle configuration. |
-| RUBY | 32 | `RubyGems`, `Bundler`, private gem servers, and `Gemfile.lock`. |
-| RUST | 1 | `Cargo`, crates.io-compatible registries, private Cargo registries, and `Cargo.lock`. |
+| RUBY | 32 | Anomaly. These are all container packages, not Ruby package manager lockfiles. |
+| RUST | 1 | Anomaly. This is an OS package, not Rust package manager lockfiles. |
 
 Cross-cutting package sources such as public container registries, operating system package managers, and curl-to-shell installers should be handled even when they do not map cleanly to a single SCA language.
 
