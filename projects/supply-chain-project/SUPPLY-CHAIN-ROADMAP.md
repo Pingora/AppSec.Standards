@@ -14,6 +14,14 @@ This roadmap narrows the work to package source control. Broader supply chain to
 
 This roadmap expands on [Supply Chain Security](<SUPPLY-CHAIN-SECURITY.md>) and the working notes in [SCRATCH Developer Supply Chain Security](<SCRATCH Developer Supply Chain Security.md>).
 
+## Problem Statement
+
+> "Implementing control over software development package management resolution, and preventing data infil/exfil."
+ 
+Currently, we are exposed to software supply chain risk as our developers pull directly from internet package repositories like PyPI and NPM. If we are hit by a "watering-hole attack" such as Shai-Hulud, we would have our developer secrets compromised or full compromise of the application or endpoint. We currently only have reactive defenses that can come in after-the-compromise such as Wiz SCA scanning.
+ 
+We can solve this by preventing developers from pulling packages from external package repositories, and only allowing them to pull from internally managed package repositories, which observe controls like dependency cooldowns and package scanning.
+
 ## Requirement
 
 1. Developers must only pull packages from internally managed package repositories.
