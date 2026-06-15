@@ -35,6 +35,18 @@ For this roadmap, an internally managed package repository may be:
 
 It does not include direct developer access to public package registries or random vendor download URLs unless there is a documented, time-bound exception.
 
+<!-- ## Solutions at a high level
+
+tbd. -->
+
+## Questions for Dev Teams
+
+- What package manager binary do you use? i.e. `pip`, `conda`, `mvn`, `gradle`, `npm`, `dotnet`, `nuget`, etc.
+- What external (internet-facing) repository remotes do you pull open-source packages from? (If unsure, you can say "default registry", i.e. `https://registry.npmjs.org/` or `https://repo.anaconda.com/pkgs/main` or `https://pypi.org/simple/`.)
+- Do you use any internal repository remotes like Nexus or Artifactory?
+- Do you publish packaged software to any internal or external repository remotes?
+<!-- (TODO: Expand on later.) ask Codex "any suggestions to enrich this section? Or is it complete?" -->
+
 ## Scope
 
 **In scope**
