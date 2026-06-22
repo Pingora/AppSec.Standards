@@ -210,6 +210,12 @@ setx JAVA_TOOL_OPTIONS "-Djavax.net.ssl.trustStoreType=Windows-ROOT -Djavax.net.
 
 Restart the shell, IDE, scanner, service, or build agent after setting the variable.
 
+If using MacOS, you can use this environment variable:
+
+```sh
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore"
+```
+
 ### Java Certificate Pinning
 
 If Java cannot use the Windows certificate store, import the NetSkope certificate into the Java trust store. Update the paths for the installed JDK or JRE:
