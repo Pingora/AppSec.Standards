@@ -213,7 +213,7 @@ Restart the shell, IDE, scanner, service, or build agent after setting the varia
 If using MacOS, you can use this environment variable:
 
 ```sh
-export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore"
+export JAVA_TOOL_OPTIONS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"
 ```
 
 ### Java Certificate Pinning
