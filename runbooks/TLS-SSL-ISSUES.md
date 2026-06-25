@@ -95,6 +95,32 @@ The NetSkope certificate should be pre-installed on managed Windows workstations
 
 ## Tool-Specific Fixes
 
+### Getting a certificate using `openssl` command line on Linux
+
+To get a root (or closest to root) cert on Linux, using only `openssl` command line, follow these steps:
+
+```
+openssl s_client -showcerts -connect example.com:443 </dev/null 2>&1 >mycert.crt
+```
+
+Replace `example.com` with the host you're trying to connect to.
+
+You then need to edit `mycert.crt` with `nano` or a similar text editor.
+
+Remove all the extra stuff that's not in `---ASCIIARMOR---` format.
+
+Keep the certificate with the highest index (number) printed next to it. `0` is the leaf cert, `1` is an intermediate (or root cert), etc.
+
+The resulting `mycert.crt` file should look like this:
+
+```
+-----BEGIN CERTIFICATE-----
+(...data...)
+-----END CERTIFICATE-----
+```
+
+Then, copy `mycert.crt` using this guide into the directory that stores certificates and run `update-ca-certificates` or whatever Distro-specific command applies.
+
 ### Git Clone on Windows Fails Over HTTPS
 
 Configure Git for Windows to use the Windows certificate store:
