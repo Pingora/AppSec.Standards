@@ -1,0 +1,11 @@
+Date,Department,User,Category,Amount
+2026-07-01,Finance,aparker,Software,129.99
+2026-07-01,Finance,aparker,Hardware,349.50
+2026-07-02,Engineering,jnguyen,Cloud,812.13
+2026-07-02,Engineering,jnguyen,Software,79.00
+2026-07-03,Operations,mmiller,Travel,245.42
+2026-07-03,Operations,skhan,Supplies,61.18
+2026-07-04,Security,lrivera,Training,499.00
+2026-07-04,Security,lrivera,Software,149.99
+2026-07-05,Finance,tross,Supplies,42.73
+2026-07-05,Engineering,cbrown,Hardware,1199.00
