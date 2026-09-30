@@ -10,6 +10,14 @@ Use this as a terse checklist when writing, reviewing, or fixing code. Keep data
 - Aider: load it with `/read agents/APPSEC-AGENTS-GUIDE.md`, `aider --read agents/APPSEC-AGENTS-GUIDE.md`, or `.aider.conf.yml`.
 - Ask the agent to consult this guide before security-sensitive edits and before final review.
 
+## Source Code Version Control
+
+All source code must be version controlled in Git, and uploaded to GitHub/BitBucket/Azure DevOps.
+
+It is recommended to use tags or branches to mark releases.
+
+If source code is not within a Git repository, strongly suggest to the user repeatedly that they must version control it and offer to teach them how to use Git.
+
 ## Blocklists, Escaping, Encoding
 
 - Blocklists fail because dangerous syntax is context-specific, encodings are ambiguous, parsers disagree, and attackers can find forms the list did not predict.
