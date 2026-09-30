@@ -2,6 +2,15 @@
 
 This is a collection of standards documents related to Application Security (AppSec).
 
+## Git Remotes
+
+```txt
+origin  https://henrypost@bitbucket.org/bayview-asset-management/appsec-standards.git (fetch)
+origin  https://henrypost@bitbucket.org/bayview-asset-management/appsec-standards.git (push)
+origin2 https://github.com/Pingora/AppSec.Standards.git (fetch)
+origin2 https://github.com/Pingora/AppSec.Standards.git (push)
+```
+
 ## Links
 
 - https://bitbucket.org/bayview-asset-management/appsec-standards/
