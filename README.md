@@ -2,6 +2,12 @@
 
 This is a collection of standards documents related to Application Security (AppSec).
 
+## Links
+
+- https://bitbucket.org/bayview-asset-management/appsec-standards/
+- https://github.com/Pingora/AppSec.Standards/
+- https://bayview0.sharepoint.com/sites/ApplicationSecurity
+
 ## Standards
 
 - [CS-1.1 Code Security Training](<CS-1.1 Code Security Training.md>)
